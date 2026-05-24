@@ -1,4 +1,4 @@
-import { ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "expo-symbols";
@@ -8,6 +8,17 @@ import { ChatBar } from "@/components/ui/ChatBar";
 import { ReviewCard } from "@/components/domain/ReviewCard";
 import { ExploreCard } from "@/components/domain/ExploreCard";
 import { ConversationRow } from "@/components/domain/ConversationRow";
+import { useRecentConversations } from "@/hooks/useConversations";
+
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  if (diffMins < 60) return `${diffMins}M AGO`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}H AGO`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}D AGO`;
+}
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -89,31 +100,6 @@ const EXPLORE_TOPICS = [
   },
 ];
 
-const RECENT_CONVERSATIONS = [
-  {
-    id: "1",
-    title: "The Stoic Philosophy of Epictetus",
-    preview:
-      "We discussed the dichotomy of control and its modern relevance...",
-    timestamp: "2 HOURS AGO",
-    cardCount: 8,
-  },
-  {
-    id: "2",
-    title: "Rise of the Roman Empire",
-    preview: "What were the key factors that enabled Rome's expansion?",
-    timestamp: "1 DAY AGO",
-    cardCount: 12,
-  },
-  {
-    id: "3",
-    title: "Consciousness and Qualia",
-    preview:
-      "Exploring the hard problem of consciousness and Mary's Room...",
-    timestamp: "3 DAYS AGO",
-    cardCount: 6,
-  },
-];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -121,6 +107,7 @@ export default function HomeScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const exploreCardWidth = (screenWidth - 20 * 2 - 12) / 2;
   const exploreRows = chunkArray(EXPLORE_TOPICS, 2);
+  const { data: recentConversations, isLoading: conversationsLoading } = useRecentConversations();
 
   return (
     <View
@@ -217,13 +204,29 @@ export default function HomeScreen() {
             subtitle="Deepen your exploration by continuing existing threads"
           />
           <View className="mt-4" style={{ gap: 4 }}>
-            {RECENT_CONVERSATIONS.map((convo) => (
-              <ConversationRow
-                key={convo.id}
-                conversation={convo}
-                onPress={() => {}}
-              />
-            ))}
+            {conversationsLoading ? (
+              <ActivityIndicator color={colors.textMuted} style={{ marginTop: 12 }} />
+            ) : recentConversations && recentConversations.length > 0 ? (
+              recentConversations.map((convo) => (
+                <ConversationRow
+                  key={convo.id}
+                  conversation={{
+                    id: convo.id,
+                    title: convo.title || "Untitled",
+                    timestamp: formatRelativeTime(convo.updated_at),
+                    cardCount: 0,
+                  }}
+                  onPress={() => router.push(`/conversation/${convo.id}`)}
+                />
+              ))
+            ) : (
+              <Text
+                className="font-sans text-text-muted"
+                style={{ fontSize: 14, marginTop: 12 }}
+              >
+                No conversations yet — start one below
+              </Text>
+            )}
           </View>
         </View>
       </ScrollView>

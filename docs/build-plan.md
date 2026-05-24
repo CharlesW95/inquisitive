@@ -1,6 +1,6 @@
 # Build Plan
 
-A sequence of 8 focused sessions, each independently executable with a clear exit criterion. The critical path is 1 → 2 → 3 → 4 → 5; sessions 6 and 7 can flex in order. Auth is deferred to session 8 — all DB queries use a hardcoded `DEV_USER_ID` constant until then, so wiring real auth at the end requires no schema changes.
+A sequence of 9 focused sessions, each independently executable with a clear exit criterion. The critical path is 1 → 2 → 3 → 4 → 5 → 6; sessions 7 and 8 can flex in order. Auth is deferred to session 9 — all DB queries use a hardcoded `DEV_USER_ID` constant until then, so wiring real auth at the end requires no schema changes.
 
 ---
 
@@ -51,21 +51,51 @@ A sequence of 8 focused sessions, each independently executable with a clear exi
 
 ---
 
-## Session 4 — Automatic Card Generation
+## Session 4 — Home Screen Live Conversations + Paginated Message Loading
 
-**Goal:** Cards are generated in the background after each AI response and visible inline in the conversation.
+**Goal:** The home screen "Continue" section loads real conversations from Supabase; returning to a long conversation loads only recent messages first and lazy-loads older ones as the user scrolls up.
+
+**Context:** `useConversations`, `useMessages`, and `getMessages` were all created in Session 3. `app/conversation/[id].tsx` already calls `useMessages(id)` on mount, so navigating back to an existing conversation already restores its history. The gaps are (a) the home screen still uses hardcoded rows, and (b) `getMessages` is an unbounded `SELECT *` — no limit, no cursor — which loads the full message history in one shot regardless of length.
+
+#### Home screen wiring
+
+- `app/(tabs)/index.tsx` — replace hardcoded Continue rows with `useConversations()` (already exported from `hooks/useConversations.ts`); take the 5 most recent by `updated_at` desc; show a loading skeleton while fetching and an empty state ("No conversations yet — start one below") when the list is empty
+- Tapping a row navigates to `app/conversation/[id].tsx`
+- Card counts in Continue rows and the conversation nav bar are hardcoded to `0` for now — wired to real data in Session 5 once the cards table exists
+
+#### Paginated message loading
+
+- `lib/db/conversations.ts` — add `getMessagePage(conversationId, limit, beforeCursor?)`: fetches `limit` messages with `created_at < beforeCursor` (or the most recent `limit` if no cursor), ordered `created_at DESC`, then reverses to ascending order before returning. Page size: **30 messages** (≈ 15 exchanges).
+- `hooks/useConversations.ts` — replace `useMessages` with `usePagedMessages(conversationId)`:
+  - Initial fetch: calls `getMessagePage(id, 30)` — the 30 most recent messages
+  - Exposes `loadOlderMessages()` action and `hasMore: boolean` (set to false when a page returns fewer than 30 items)
+  - Prepends older pages to the message list; after prepend, restores scroll position so the view does not jump (measure content height before prepend, adjust `scrollTo` offset after)
+- `app/conversation/[id].tsx`:
+  - Replace `useMessages` with `usePagedMessages`
+  - Add `onScroll` handler: when `contentOffset.y` drops below 200px from the top and `hasMore` is true and not already fetching, call `loadOlderMessages()`
+  - Show a small activity indicator pinned to the top of the message list while an older page is loading
+  - On initial load, scroll to bottom as before
+
+**Exit criteria:** Create a conversation with 40+ messages (or seed Supabase directly); navigate away and back; only the 30 most recent load initially; scrolling to the top loads the older batch without the view jumping; the home screen Continue section shows real conversations and tapping one reopens it.
+
+---
+
+## Session 5 — Automatic Card Generation
+
+**Goal:** Cards are generated in the background after each AI response and visible inline in the conversation; card counts are wired throughout the app.
 
 - `lib/ai/card-generation.ts` — prompt + structured output parser for all 4 modalities
 - `lib/db/cards.ts` — CRUD for `cards`, `card_schedules` (created alongside each new card), `review_attempts`; all queries scope by `user_id` using `DEV_USER_ID`
 - `lib/db/topics.ts` — upsert topics + join tables
 - Background trigger: after stream complete, call card generation, save cards + initial FSRS schedule
 - `components/domain/GeneratedCard` — inline card chip in conversation (shows count, dismissible)
+- **Wire card counts** — now that the `cards` table exists, update `getConversations` in `lib/db/conversations.ts` to use `.select('*, cards(count)')` (PostgREST embedded count); add `card_count: number` to the `Conversation` type in `lib/types.ts` (derived at query time, not stored); update `ConversationRow` on the home screen and the nav bar in `app/conversation/[id].tsx` to display the real count
 
-**Exit criteria:** Finish a conversation exchange; cards appear inline; visible in Supabase dashboard.
+**Exit criteria:** Finish a conversation exchange; cards appear inline; visible in Supabase dashboard; card count in the conversation nav bar and home screen Continue rows reflects the real number of cards.
 
 ---
 
-## Session 5 — Review Screen & FSRS
+## Session 6 — Review Screen & FSRS
 
 **Goal:** Due cards surface for review; answering updates the FSRS schedule.
 
@@ -79,7 +109,7 @@ A sequence of 8 focused sessions, each independently executable with a clear exi
 
 ---
 
-## Session 6 — Library Screen
+## Session 7 — Library Screen
 
 **Goal:** Users can browse all their cards and conversations, organized by topic.
 
@@ -91,12 +121,11 @@ A sequence of 8 focused sessions, each independently executable with a clear exi
 
 ---
 
-## Session 7 — Home Screen Live Data + End-to-End Polish
+## Session 8 — Home Screen Live Data + End-to-End Polish
 
-**Goal:** Home screen shows real data; full user flow works end-to-end.
+**Goal:** Home screen shows real data for all remaining sections; full user flow works end-to-end.
 
 - Wire home "Review" section to real `useDueCards` count
-- Wire "Continue" section to real recent conversations
 - Explore section: hardcoded curated topics (personalization is post-MVP)
 - End-of-conversation flow: modal/banner inviting user to review newly generated cards
 - Loading states, empty states, error toasts throughout
@@ -105,7 +134,7 @@ A sequence of 8 focused sessions, each independently executable with a clear exi
 
 ---
 
-## Session 8 — Auth Flow
+## Session 9 — Auth Flow
 
 **Goal:** Real user auth replaces the `DEV_USER_ID` stub; app is ready for multiple users.
 

@@ -16,6 +16,16 @@ export function useConversations() {
   });
 }
 
+export function useRecentConversations() {
+  return useQuery({
+    queryKey: ['conversations', DEV_USER_ID],
+    queryFn: async () => {
+      const all = await getConversations(DEV_USER_ID);
+      return all.slice(0, 5);
+    },
+  });
+}
+
 export function useConversation(id: string) {
   return useQuery({
     queryKey: ['conversation', id],

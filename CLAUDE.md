@@ -18,7 +18,7 @@ An AI-native React Native app for curiosity-driven learning with built-in active
 
 ## Key Commands
 
-Run all commands from `mobile/`:
+Run all commands from `inquisitive/inquisitive/`:
 
 ```bash
 npx expo start              # Start dev server
@@ -33,17 +33,26 @@ npx expo install <pkg>      # Install Expo-compatible packages (always use this,
 inquisitive/
 ├── CLAUDE.md               # This file
 ├── docs/                   # Product and architecture docs
-└── mobile/                 # Expo app (all commands run from here)
-    ├── app/                Expo Router screens (file = route)
-    │   └── (tabs)/         Bottom tab navigator
-    ├── components/         Reusable UI components
-    ├── hooks/              Custom React hooks
-    ├── lib/
-    │   ├── ai/             Anthropic API client + streaming helpers
-    │   ├── db/             Supabase client + typed query functions
-    │   ├── srs/            Spaced repetition (FSRS) logic
-    │   └── types.ts        Shared TypeScript types (canonical source of truth)
-    └── constants/          Colors, typography tokens
+└── inquisitive/            # Expo app (all commands run from here)
+    ├── src/
+    │   ├── app/            Expo Router screens (file = route)
+    │   │   ├── (tabs)/     Bottom tab navigator (index, review, library)
+    │   │   ├── (auth)/     Auth screens (sign-in)
+    │   │   ├── conversation/
+    │   │   └── card/
+    │   ├── components/
+    │   │   ├── ui/         Generic primitives (Button, Input, etc.)
+    │   │   └── domain/     App-specific components
+    │   ├── hooks/          Custom React hooks (TanStack Query wrappers)
+    │   ├── lib/
+    │   │   ├── ai/         Anthropic API client + streaming helpers
+    │   │   ├── db/         Supabase client + typed query functions
+    │   │   ├── srs/        Spaced repetition (FSRS) logic
+    │   │   └── types.ts    Shared TypeScript types (canonical source of truth)
+    │   └── constants/      Colors, typography, spacing, radius
+    ├── tailwind.config.js
+    ├── babel.config.js
+    └── metro.config.js
 ```
 
 ## Conventions

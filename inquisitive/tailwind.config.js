@@ -17,6 +17,9 @@ module.exports = {
       },
       fontFamily: {
         sans: ["Inter"],
+        "sans-medium": ["Inter-Medium"],
+        "sans-semibold": ["Inter-SemiBold"],
+        "sans-bold": ["Inter-Bold"],
         serif: ["PlayfairDisplay"],
       },
     },

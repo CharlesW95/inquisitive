@@ -1,9 +1,237 @@
-import { Text, View } from "react-native";
+import { ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SymbolView } from "expo-symbols";
+import { colors } from "@/constants/colors";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { ChatBar } from "@/components/ui/ChatBar";
+import { ReviewCard } from "@/components/domain/ReviewCard";
+import { ExploreCard } from "@/components/domain/ExploreCard";
+import { ConversationRow } from "@/components/domain/ConversationRow";
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  return arr.reduce((chunks, item, i) => {
+    if (i % size === 0) chunks.push([item]);
+    else chunks[chunks.length - 1].push(item);
+    return chunks;
+  }, [] as T[][]);
+}
+
+const REVIEW_CARDS = [
+  {
+    id: "1",
+    modality: "flashcard",
+    topicTag: "STOIC PHILOSOPHY",
+    prompt: "What is the Stoic concept of the dichotomy of control?",
+    dueLabel: "DUE TODAY",
+  },
+  {
+    id: "2",
+    modality: "multiple_choice",
+    topicTag: "ROMAN HISTORY",
+    prompt:
+      "Which Roman emperor initiated the period known as the Five Good Emperors?",
+    dueLabel: "DUE TODAY",
+  },
+  {
+    id: "3",
+    modality: "active",
+    topicTag: "PHILOSOPHY OF MIND",
+    prompt: "Explain the hard problem of consciousness in your own words.",
+    dueLabel: "DUE IN 2 DAYS",
+  },
+];
+
+const EXPLORE_TOPICS = [
+  {
+    id: "1",
+    category: "PHILOSOPHY",
+    title: "Theories of Consciousness",
+    description: "What is consciousness, and why does it exist?",
+  },
+  {
+    id: "2",
+    category: "HISTORY",
+    title: "The Fall of the Roman Republic",
+    description: "How did Rome transition from republic to empire?",
+  },
+  {
+    id: "3",
+    category: "SCIENCE",
+    title: "The Nature of Time",
+    description: "Is time real, and does it flow in one direction?",
+  },
+  {
+    id: "4",
+    category: "PHILOSOPHY",
+    title: "Free Will and Determinism",
+    description:
+      "Do humans truly have free will, or is everything predetermined?",
+  },
+  {
+    id: "5",
+    category: "HISTORY",
+    title: "The Silk Road",
+    description: "How did trade routes shape the ancient world?",
+  },
+  {
+    id: "6",
+    category: "SCIENCE",
+    title: "Evolution and Natural Selection",
+    description: "How does life adapt and diversify over time?",
+  },
+];
+
+const RECENT_CONVERSATIONS = [
+  {
+    id: "1",
+    title: "The Stoic Philosophy of Epictetus",
+    preview:
+      "We discussed the dichotomy of control and its modern relevance...",
+    timestamp: "2 HOURS AGO",
+    cardCount: 8,
+  },
+  {
+    id: "2",
+    title: "Rise of the Roman Empire",
+    preview: "What were the key factors that enabled Rome's expansion?",
+    timestamp: "1 DAY AGO",
+    cardCount: 12,
+  },
+  {
+    id: "3",
+    title: "Consciousness and Qualia",
+    preview:
+      "Exploring the hard problem of consciousness and Mary's Room...",
+    timestamp: "3 DAYS AGO",
+    cardCount: 6,
+  },
+];
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const exploreCardWidth = (screenWidth - 20 * 2 - 12) / 2;
+  const exploreRows = chunkArray(EXPLORE_TOPICS, 2);
+
   return (
-    <View className="flex-1 bg-background items-center justify-center">
-      <Text className="text-text-primary text-base">Home</Text>
+    <View
+      className="flex-1 bg-background"
+      style={{ paddingTop: insets.top }}
+    >
+      {/* Top Nav Bar */}
+      <View className="flex-row items-center justify-between px-5 py-3">
+        <Text
+          className="font-sans text-text-muted uppercase"
+          style={{ fontSize: 11, letterSpacing: 1.2 }}
+        >
+          INQUISITIVE
+        </Text>
+        <View className="flex-row items-center" style={{ gap: 16 }}>
+          <View className="flex-row items-center" style={{ gap: 4 }}>
+            <SymbolView name="flame.fill" size={16} tintColor={colors.accent} />
+            <Text
+              className="font-sans text-text-primary"
+              style={{ fontSize: 13 }}
+            >
+              12
+            </Text>
+          </View>
+          <SymbolView name="gearshape" size={20} tintColor={colors.textMuted} />
+        </View>
+      </View>
+
+      {/* Scrollable Content */}
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Section 1 — Greeting */}
+        <View className="px-5 pt-4" style={{ marginBottom: 40 }}>
+          <Text
+            className="font-serif text-text-primary"
+            style={{ fontSize: 36 }}
+          >
+            {getGreeting()}, Charles.
+          </Text>
+          <Text
+            className="font-sans text-text-secondary mt-2"
+            style={{ fontSize: 15 }}
+          >
+            What are you curious about today?
+          </Text>
+        </View>
+
+        {/* Section 2 — Review */}
+        <View style={{ marginBottom: 40 }}>
+          <View className="px-5 mb-4">
+            <SectionHeader
+              title="Review"
+              subtitle="Engage with knowledge you've explored to deepen your understanding"
+              ctaLabel="SEE ALL ›"
+              onCtaPress={() => router.push("/(tabs)/review")}
+            />
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingLeft: 20, paddingRight: 20, gap: 12 }}
+          >
+            {REVIEW_CARDS.map((card) => (
+              <ReviewCard key={card.id} card={card} onPress={() => {}} />
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Section 3 — Explore */}
+        <View className="px-5" style={{ marginBottom: 40 }}>
+          <SectionHeader
+            title="Explore"
+            subtitle="Discover new knowledge by starting new threads"
+          />
+          <View className="mt-4" style={{ gap: 12 }}>
+            {exploreRows.map((row, i) => (
+              <View key={i} className="flex-row" style={{ gap: 12 }}>
+                {row.map((topic) => (
+                  <ExploreCard
+                    key={topic.id}
+                    card={topic}
+                    width={exploreCardWidth}
+                    onPress={() => {}}
+                  />
+                ))}
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Section 4 — Continue */}
+        <View className="px-5" style={{ marginBottom: 40 }}>
+          <SectionHeader
+            title="Continue"
+            subtitle="Deepen your exploration by continuing existing threads"
+          />
+          <View className="mt-4" style={{ gap: 4 }}>
+            {RECENT_CONVERSATIONS.map((convo) => (
+              <ConversationRow
+                key={convo.id}
+                conversation={convo}
+                onPress={() => {}}
+              />
+            ))}
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Sticky Chat Bar */}
+      <View style={{ paddingBottom: insets.bottom + 8, paddingTop: 8 }}>
+        <ChatBar onPress={() => router.push("/conversation/new")} />
+      </View>
     </View>
   );
 }

@@ -1,11 +1,24 @@
-import { Text, View } from "react-native";
+import { useEffect, useRef } from 'react';
+import { View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { createConversation } from '@/lib/db/conversations';
+import { DEV_USER_ID } from '@/constants/dev';
 
 export default function NewConversationScreen() {
-  return (
-    <View className="flex-1 bg-background items-center justify-center">
-      <Text className="font-sans text-text-primary" style={{ fontSize: 15 }}>
-        New Conversation
-      </Text>
-    </View>
-  );
+  const router = useRouter();
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    createConversation(DEV_USER_ID).then((conversation) => {
+      if (mounted.current) {
+        router.replace(`/conversation/${conversation.id}`);
+      }
+    });
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  return <View className="flex-1 bg-background" />;
 }

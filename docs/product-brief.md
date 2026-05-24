@@ -146,11 +146,9 @@ For MVP, Explore cards are hardcoded — a static list of 6–8 curated topics c
 
 **Conversation list:** Vertical stack of rows, no dividers, ~4px gap between rows.
 
-**Conversation row anatomy** (full width, ~64px tall):
-- **Left column (flex: 1):**
-  - Conversation title — body-large, bold, white, single line, truncated with `…`
-  - Preview snippet — body-small, muted, single line, truncated with `…` (first user message or AI summary)
-- **Right column (fixed width, right-aligned):**
+**Conversation row anatomy** (full width, ~48px tall):
+- **Left:** Conversation title — body-large, bold, white, single line, truncated with `…`
+- **Right (fixed width, right-aligned):**
   - Relative timestamp — body-small, muted, uppercase (e.g., `2 HOURS AGO`, `1 DAY AGO`)
   - Card count — body-small, muted, uppercase (e.g., `12 CARDS`, `8 CARDS`)
 

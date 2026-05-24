@@ -4,7 +4,6 @@ interface ConversationRowProps {
   conversation: {
     id: string;
     title: string;
-    preview: string;
     timestamp: string;
     cardCount: number;
   };
@@ -15,23 +14,15 @@ export function ConversationRow({ conversation, onPress }: ConversationRowProps)
   return (
     <TouchableOpacity
       onPress={onPress}
-      className="flex-row items-center py-3"
+      className="flex-row items-start py-3"
       activeOpacity={0.7}
     >
       <View className="flex-1 mr-4">
         <Text
           className="font-sans-semibold text-text-primary"
           style={{ fontSize: 17 }}
-          numberOfLines={1}
         >
           {conversation.title}
-        </Text>
-        <Text
-          className="font-sans text-text-secondary mt-0.5"
-          style={{ fontSize: 13 }}
-          numberOfLines={1}
-        >
-          {conversation.preview}
         </Text>
       </View>
       <View className="items-end">

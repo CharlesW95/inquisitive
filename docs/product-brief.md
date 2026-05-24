@@ -171,11 +171,86 @@ Tapping anywhere in the bar navigates to `app/conversation/new.tsx` and focuses 
 
 ### Conversation Screen
 
-- Open-ended chat with AI
-- Cards auto-generated in background during conversation
-- Inline card view/edit as conversation progresses
-- Launch convo-specific review from within conversation
-- Conversations never "end" — always resumable; cards remain linked to source conversation
+Open-ended chat with AI. Cards are auto-generated in the background as the conversation evolves. Conversations never "end" — they are always resumable and cards remain linked to their source conversation.
+
+---
+
+#### Navigation Bar
+
+Single row, three elements:
+
+- **Left:** Back arrow (chevron) — navigates to Home
+- **Center:** Conversation title — body-large, bold, white. Displays `"New conversation"` until the first user message is sent, at which point the AI generates a concise, descriptive title (e.g. `"Fall of the Roman Republic"`). Title is truncated with `…` if it overflows.
+- **Right:** Cards button — stack/layers icon + card count (e.g. `0`, `4`). Body-small, muted color. Tapping will eventually open a card list view for this conversation (not yet implemented in MVP). The count increments as cards are generated during the conversation.
+
+---
+
+#### Empty State (no messages yet)
+
+Displayed when the conversation has not been started (no messages sent). The message list is hidden; this view fills the available space between the nav bar and the input bar.
+
+**Center content** (vertically and horizontally centered in the available space):
+
+- **Icon:** Sparkle/star icon (~48px), displayed inside a circular dark-gold pill/badge, accent color (gold/yellow)
+- **Heading:** `Ask anything.` — display font, bold, white
+- **Subtitle:** `Start a conversation about any topic and begin learning.` — body, muted foreground color, centered, 2 lines max
+
+**Topic chips** (below center content, ~24px gap):
+
+- **Section label:** `OR TRY ONE OF THESE` — uppercase, body-small, muted, centered
+- **Chip grid:** Wrapping row(s) of rounded pill chips, centered. Each chip shows a topic label (e.g. `Roman Empire`, `Stoic Philosophy`). Dark elevated surface, body-small, white text, ~8px vertical padding, ~16px horizontal padding.
+- For MVP, chips are a hardcoded static list of 6 topics:
+  - Roman Empire
+  - Stoic Philosophy
+  - Kant's Ethics
+  - Causes of WWI
+  - Quantum Mechanics
+  - French Revolution
+- **Tapping a chip** populates the input bar with a suitable opening question for that topic (e.g. tapping "Roman Empire" inserts `"Tell me about the rise of the Roman Empire"`). The keyboard focuses and the user can edit or send immediately. For MVP these starter prompts are hardcoded strings paired to each chip.
+
+---
+
+#### Active State (conversation in progress)
+
+Displayed once the first message has been sent. The empty state is replaced by a scrollable message list.
+
+**Message list** (`ScrollView`, inverted / anchored to bottom):
+
+- New messages appear at the bottom; older messages scroll upward.
+- Auto-scrolls to the latest message after each send or AI response chunk.
+
+**User message bubble:**
+- Right-aligned
+- White background, dark text
+- Rounded rect (~16px radius, flat on bottom-right corner)
+- Body font
+- Timestamp below bubble, body-small, muted, right-aligned (e.g. `9:32 AM`)
+
+**AI message bubble:**
+- Left-aligned
+- Accent color background (gold/yellow), dark text
+- Rounded rect (~16px radius, flat on bottom-left corner)
+- Body font
+- Timestamp below bubble, body-small, muted, left-aligned
+- During streaming, display a typing indicator until the first token arrives, then stream text in incrementally
+
+**Spacing:** ~12px vertical gap between message groups (a user message + its AI reply counts as one group).
+
+---
+
+#### Input Bar (both states)
+
+Pinned to the bottom of the screen, above the home indicator (safe area). Does not scroll with content.
+
+- Container: full-width, ~52px tall pill/rounded-rect, dark surface color with slight elevation, 16px horizontal margin from screen edges
+- **Center:** Placeholder text `What are you curious about?` — body, muted, flex: 1. Expands vertically (up to ~4 lines) as the user types multi-line input.
+- **Right icon:** Microphone icon, muted color. Non-functional in MVP (visual only). When the input is non-empty, replaced by a send button (arrow icon, accent color).
+
+Sending a message:
+1. Appends the user bubble immediately.
+2. Triggers the AI API call (streaming).
+3. On first send of a new conversation: fires a background request to generate and set the conversation title.
+4. Cards are generated asynchronously in the background as the conversation grows; the card count in the nav bar updates when new cards are created.
 
 ### Review Screen
 

@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { DEV_USER_ID } from '@/constants/dev';
 import {
   createConversation,
+  deleteConversation,
   getConversation,
   getConversations,
   getConversationsPaged,
@@ -95,6 +96,18 @@ export function useUpdateConversationTitle() {
   return useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) =>
       updateConversationTitle(id, title),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversation', variables.id] });
+    },
+  });
+}
+
+export function useDeleteConversation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, deleteCards }: { id: string; deleteCards: boolean }) =>
+      deleteConversation(id, deleteCards),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       queryClient.invalidateQueries({ queryKey: ['conversation', variables.id] });

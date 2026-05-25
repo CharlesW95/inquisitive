@@ -50,7 +50,7 @@ export function ReviewCard({ card, onPress }: ReviewCardProps) {
             <TopicTag label={card.topicTag} />
           </View>
           <Text
-            className="font-serif-bold text-text-primary mt-2"
+            className="font-serif text-text-primary mt-2"
             style={{ fontSize: 17 }}
             numberOfLines={3}
           >

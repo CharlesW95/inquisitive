@@ -141,7 +141,7 @@ export default function HomeScreen() {
         {/* Section 1 — Greeting */}
         <View className="px-5 pt-4" style={{ marginBottom: 40 }}>
           <Text
-            className="font-serif text-text-primary"
+            className="font-serif-bold text-text-primary"
             style={{ fontSize: 36 }}
           >
             {getGreeting()}, Charles.

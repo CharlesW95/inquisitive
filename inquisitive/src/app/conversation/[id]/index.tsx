@@ -209,10 +209,10 @@ export default function ConversationScreen() {
           {title}
         </Text>
 
-        <View style={styles.navRight}>
+        <TouchableOpacity onPress={() => router.push({ pathname: '/conversation/[id]/cards', params: { id } })} style={styles.navRight} hitSlop={8}>
           <SymbolView name="square.stack" size={16} tintColor={colors.textMuted} />
           <Text style={styles.cardCount}>{cardCount}</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyHeading: {
-    fontFamily: 'PlayfairDisplay',
+    fontFamily: 'Fraunces-Bold',
     fontSize: 28,
     color: colors.textPrimary,
     marginBottom: 10,

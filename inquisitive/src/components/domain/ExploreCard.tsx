@@ -36,7 +36,7 @@ export function ExploreCard({ card, width, onPress }: ExploreCardProps) {
         />
       </View>
       <Text
-        className="font-sans-bold text-text-primary mt-2"
+        className="font-serif-bold text-text-primary mt-2"
         style={{ fontSize: 17 }}
         numberOfLines={2}
       >

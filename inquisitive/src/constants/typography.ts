@@ -20,6 +20,6 @@ export const typography = {
   },
   fonts: {
     sans:  "Inter",
-    serif: "PlayfairDisplay",
+    serif: "Fraunces",
   },
 } as const;

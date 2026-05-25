@@ -12,7 +12,7 @@ export function SectionHeader({ title, subtitle, ctaLabel, onCtaPress }: Section
     <View>
       <View className="flex-row items-center justify-between">
         <Text
-          className="font-serif text-text-primary flex-1"
+          className="font-serif-bold text-text-primary flex-1"
           style={{ fontSize: 28 }}
         >
           {title}

@@ -7,7 +7,7 @@ interface TopicTagProps {
 export function TopicTag({ label }: TopicTagProps) {
   return (
     <Text
-      className="font-sans-bold text-accent uppercase"
+      className="font-sans-semibold text-accent uppercase"
       style={{ fontSize: 11, letterSpacing: 0.8 }}
     >
       {label}

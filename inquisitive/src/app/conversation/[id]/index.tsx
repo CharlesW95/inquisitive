@@ -1,13 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
+  Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
@@ -17,13 +22,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
 import { insertMessage, updateConversationTitle } from '@/lib/db/conversations';
-import { generateConversationTitle, streamChatResponse } from '@/lib/ai/chat';
+import { generateConversationTitle, streamChatResponse, REFUSAL_TEXT } from '@/lib/ai/chat';
 import { generateCardsForExchange } from '@/lib/ai/card-generation';
 import { generateFollowUpSuggestions } from '@/lib/ai/suggestions';
 import { getCardFrontsForConversation, insertCards } from '@/lib/db/cards';
-import { useConversation, useMessages } from '@/hooks/useConversations';
+import { useConversation, useDeleteConversation, useMessages } from '@/hooks/useConversations';
 import { useCardCount } from '@/hooks/useCards';
 import { DEV_USER_ID } from '@/constants/dev';
+import { useToastStore } from '@/stores/toastStore';
 import { KeepExploring } from '@/components/domain/KeepExploring';
 import { serifBodyMarkdownStyles } from '@/constants/typography';
 import { useSuggestionsStore } from '@/stores/suggestionsStore';
@@ -74,6 +80,43 @@ function TypingIndicator() {
   );
 }
 
+function DeleteConversationModal({
+  visible,
+  onCancel,
+  onDeleteWithCards,
+  onDeleteKeepCards,
+}: {
+  visible: boolean;
+  onCancel: () => void;
+  onDeleteWithCards: () => void;
+  onDeleteKeepCards: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.overlay}>
+        <View style={styles.dialog}>
+          <Text style={styles.dialogTitle}>Delete Conversation</Text>
+          <Text style={styles.dialogSubtitle}>
+            What would you like to do with the cards from this conversation?
+          </Text>
+          <View style={styles.dialogRule} />
+          <TouchableOpacity style={styles.dialogBtn} onPress={onDeleteWithCards}>
+            <Text style={styles.dialogBtnDestructive}>Delete Cards Too</Text>
+          </TouchableOpacity>
+          <View style={styles.dialogRule} />
+          <TouchableOpacity style={styles.dialogBtn} onPress={onDeleteKeepCards}>
+            <Text style={styles.dialogBtnPrimary}>Keep My Cards</Text>
+          </TouchableOpacity>
+          <View style={styles.dialogRule} />
+          <TouchableOpacity style={styles.dialogBtn} onPress={onCancel}>
+            <Text style={styles.dialogBtnCancel}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 type DisplayMessage = Message | { id: 'streaming'; role: 'assistant'; content: string; created_at: '' };
 
 export default function ConversationScreen() {
@@ -85,18 +128,26 @@ export default function ConversationScreen() {
   const [inputText, setInputText] = useState('');
   const [streamingText, setStreamingText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
   const [optimisticUserMsg, setOptimisticUserMsg] = useState<Message | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+  const menuBtnRef = useRef<React.ElementRef<typeof TouchableOpacity>>(null);
+  const { width: screenWidth } = useWindowDimensions();
+  const showToast = useToastStore((s) => s.showToast);
+  const deleteConversation = useDeleteConversation();
   const { suggestionsByConversation, setSuggestions: storeSuggestions, clearSuggestions } = useSuggestionsStore();
   const suggestions = suggestionsByConversation[id] ?? [];
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
 
-  const { data: conversation } = useConversation(id);
-  const { data: messages = [] } = useMessages(id);
+  const { data: conversation, isLoading: convLoading } = useConversation(id);
+  const { data: messages = [], isLoading: msgsLoading } = useMessages(id);
   const { data: cardCount = 0 } = useCardCount(id);
+  const isInitialLoad = convLoading || msgsLoading;
 
   const title = conversation?.title || 'New conversation';
 
@@ -119,6 +170,12 @@ export default function ConversationScreen() {
   const hasMessages = messages.length > 0 || isStreaming;
 
   useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
+  useEffect(() => {
     if (hasMessages) {
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     }
@@ -129,7 +186,6 @@ export default function ConversationScreen() {
     if (!text || isStreaming) return;
 
     setInputText('');
-    setSendError(null);
     clearSuggestions(id);
     setSuggestionsLoading(false);
 
@@ -191,25 +247,45 @@ export default function ConversationScreen() {
               queryClient.invalidateQueries({ queryKey: ['conversations'] });
             }
           } catch (e) {
-            console.error('Card generation failed:', e);
+            showToast('Card generation failed', 'error');
           }
         });
         setOptimisticUserMsg(null);
         setStreamingText('');
         setIsStreaming(false);
-        setSuggestionsLoading(true);
-        generateFollowUpSuggestions(text, fullText)
-          .then((results) => storeSuggestions(id, results))
-          .catch(() => {})
-          .finally(() => setSuggestionsLoading(false));
+        if (fullText.trim() !== REFUSAL_TEXT) {
+          setSuggestionsLoading(true);
+          generateFollowUpSuggestions(text, fullText)
+            .then((results) => storeSuggestions(id, results))
+            .catch(() => {})
+            .finally(() => setSuggestionsLoading(false));
+        }
       },
       (error) => {
         console.error('Stream error:', error);
-        setSendError('Failed to get a response. Please try again.');
+        showToast('Failed to get a response. Please try again.', 'error');
         setOptimisticUserMsg(null);
         setIsStreaming(false);
       },
     );
+  }
+
+  function handleMenuPress() {
+    if (menuOpen) { setMenuOpen(false); return; }
+    menuBtnRef.current?.measureInWindow((x, y, w, h) => {
+      setMenuPos({ top: y + h + 4, right: screenWidth - (x + w) });
+      setMenuOpen(true);
+    });
+  }
+
+  async function executeDelete(deleteCards: boolean) {
+    setShowDeleteModal(false);
+    try {
+      await deleteConversation.mutateAsync({ id, deleteCards });
+      router.replace('/(tabs)/');
+    } catch {
+      showToast('Failed to delete conversation', 'error');
+    }
   }
 
   return (
@@ -224,19 +300,28 @@ export default function ConversationScreen() {
           {title}
         </Text>
 
-        <TouchableOpacity onPress={() => router.push({ pathname: '/conversation/[id]/cards', params: { id } })} style={styles.navRight} hitSlop={8}>
-          <SymbolView name="square.stack" size={16} tintColor={colors.textMuted} />
-          <Text style={styles.cardCount}>{cardCount}</Text>
-        </TouchableOpacity>
+        <View style={styles.navRightGroup}>
+          <TouchableOpacity onPress={() => router.push({ pathname: '/conversation/[id]/cards', params: { id } })} style={styles.navCardsBtn} hitSlop={8}>
+            <SymbolView name="square.stack" size={16} tintColor={colors.textMuted} />
+            <Text style={styles.cardCount}>{cardCount}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity ref={menuBtnRef} onPress={handleMenuPress} hitSlop={8}>
+            <SymbolView name="ellipsis" size={18} tintColor={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={insets.top + 52}
+        keyboardVerticalOffset={0}
       >
         {/* Message area */}
-        {hasMessages ? (
+        {isInitialLoad ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={colors.textMuted} size="large" />
+          </View>
+        ) : hasMessages ? (
           <ScrollView
             ref={scrollRef}
             style={{ flex: 1 }}
@@ -325,13 +410,8 @@ export default function ConversationScreen() {
           </ScrollView>
         )}
 
-        {/* Error */}
-        {sendError && (
-          <Text style={styles.errorText}>{sendError}</Text>
-        )}
-
         {/* Input Bar */}
-        <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 8 }]}>
+        <View style={[styles.inputContainer, { paddingBottom: keyboardVisible ? 8 : insets.bottom + 8 }]}>
           <View style={styles.inputBar}>
             <TextInput
               ref={inputRef}
@@ -350,15 +430,41 @@ export default function ConversationScreen() {
               hitSlop={8}
               style={styles.inputIcon}
             >
-              {inputText.trim() ? (
-                <SymbolView name="arrow.up.circle.fill" size={28} tintColor={colors.accent} />
-              ) : (
-                <SymbolView name="mic" size={20} tintColor={colors.textMuted} />
-              )}
+              <SymbolView
+                name="arrow.up.circle.fill"
+                size={28}
+                tintColor={inputText.trim() ? colors.accent : colors.textMuted}
+              />
             </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Ellipsis popover */}
+      <Modal
+        visible={menuOpen}
+        transparent
+        animationType="none"
+        onRequestClose={() => setMenuOpen(false)}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setMenuOpen(false)} />
+        <View style={[styles.popover, { top: menuPos.top, right: menuPos.right }]}>
+          <TouchableOpacity
+            style={styles.popoverItem}
+            onPress={() => { setMenuOpen(false); setShowDeleteModal(true); }}
+          >
+            <SymbolView name="trash" size={15} tintColor="#E05252" />
+            <Text style={styles.popoverTextDestructive}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      <DeleteConversationModal
+        visible={showDeleteModal}
+        onCancel={() => setShowDeleteModal(false)}
+        onDeleteWithCards={() => executeDelete(true)}
+        onDeleteKeepCards={() => executeDelete(false)}
+      />
     </View>
   );
 }
@@ -390,16 +496,99 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     textAlign: 'center',
   },
-  navRight: {
-    width: 32,
+  navRightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  navCardsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
   },
   cardCount: {
     fontFamily: 'Inter',
     fontSize: 11,
+    color: colors.textMuted,
+  },
+  // Ellipsis popover
+  popover: {
+    position: 'absolute',
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minWidth: 130,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 10,
+  },
+  popoverItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  popoverTextDestructive: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    color: '#E05252',
+  },
+  // Delete conversation modal
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialog: {
+    width: 280,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
+    paddingTop: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 8,
+  },
+  dialogTitle: {
+    fontFamily: 'Fraunces-Bold',
+    fontSize: 20,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  dialogSubtitle: {
+    fontFamily: 'Inter',
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  dialogRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+  },
+  dialogBtn: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  dialogBtnDestructive: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: '#E05252',
+  },
+  dialogBtnPrimary: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  dialogBtnCancel: {
+    fontFamily: 'Inter',
+    fontSize: 15,
     color: colors.textMuted,
   },
   // Message list
@@ -551,7 +740,7 @@ const styles = StyleSheet.create({
   },
   inputBar: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     backgroundColor: colors.surfaceInput,
     borderRadius: 24,
     paddingHorizontal: 16,
@@ -564,20 +753,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
     maxHeight: 96,
+    lineHeight: 20,
+    minHeight: 20,
     padding: 0,
     margin: 0,
   },
   inputIcon: {
     alignSelf: 'flex-end',
     marginBottom: 1,
-  },
-  // Error
-  errorText: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    color: '#E05252',
-    textAlign: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 4,
   },
 });

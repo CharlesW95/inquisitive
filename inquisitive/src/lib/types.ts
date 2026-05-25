@@ -23,6 +23,7 @@ export interface Conversation {
   title: string;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
   card_count?: number;
 }
 

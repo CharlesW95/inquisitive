@@ -14,6 +14,7 @@ import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
 import { useCreateCard } from '@/hooks/useCards';
 import { DEV_USER_ID } from '@/constants/dev';
+import { useToastStore } from '@/stores/toastStore';
 
 const FRONT_MAX = 200;
 const BACK_MAX = 500;
@@ -29,12 +30,17 @@ export default function NewCardScreen() {
   const [back, setBack] = useState('');
 
   const createCard = useCreateCard();
+  const showToast = useToastStore((s) => s.showToast);
   const canSave = front.trim().length > 0 && back.trim().length > 0;
 
   async function handleSave() {
     if (!canSave) return;
-    await createCard.mutateAsync({ userId: DEV_USER_ID, conversationId, front, back });
-    router.back();
+    try {
+      await createCard.mutateAsync({ userId: DEV_USER_ID, conversationId, front, back });
+      router.back();
+    } catch {
+      showToast('Failed to save card', 'error');
+    }
   }
 
   return (

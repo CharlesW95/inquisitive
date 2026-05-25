@@ -17,7 +17,11 @@ import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
 import { insertMessage, updateConversationTitle } from '@/lib/db/conversations';
 import { generateConversationTitle, streamChatResponse } from '@/lib/ai/chat';
+import { generateCardsForExchange } from '@/lib/ai/card-generation';
+import { getCardFrontsForConversation, insertCards } from '@/lib/db/cards';
 import { useConversation, useMessages } from '@/hooks/useConversations';
+import { useCardCount } from '@/hooks/useCards';
+import { DEV_USER_ID } from '@/constants/dev';
 import type { Message } from '@/lib/types';
 
 const TOPIC_CHIPS: { label: string; prompt: string }[] = [
@@ -84,6 +88,7 @@ export default function ConversationScreen() {
 
   const { data: conversation } = useConversation(id);
   const { data: messages = [] } = useMessages(id);
+  const { data: cardCount = 0 } = useCardCount(id);
 
   const title = conversation?.title || 'New conversation';
 
@@ -160,8 +165,24 @@ export default function ConversationScreen() {
         scrollRef.current?.scrollToEnd({ animated: false });
       },
       (fullText) => {
-        insertMessage(id, 'assistant', fullText).then(() => {
+        insertMessage(id, 'assistant', fullText).then(async (assistantMsg) => {
           queryClient.invalidateQueries({ queryKey: ['messages', id] });
+          try {
+            const existingFronts = await getCardFrontsForConversation(id);
+            const drafts = await generateCardsForExchange(
+              conversation?.title ?? '',
+              text,
+              fullText,
+              existingFronts,
+            );
+            if (drafts.length > 0) {
+              await insertCards(DEV_USER_ID, id, assistantMsg.id, drafts);
+              queryClient.invalidateQueries({ queryKey: ['cardCount', id] });
+              queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            }
+          } catch (e) {
+            console.error('Card generation failed:', e);
+          }
         });
         setOptimisticUserMsg(null);
         setStreamingText('');
@@ -190,7 +211,7 @@ export default function ConversationScreen() {
 
         <View style={styles.navRight}>
           <SymbolView name="square.stack" size={16} tintColor={colors.textMuted} />
-          <Text style={styles.cardCount}>0</Text>
+          <Text style={styles.cardCount}>{cardCount}</Text>
         </View>
       </View>
 

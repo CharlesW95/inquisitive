@@ -1,4 +1,4 @@
-export type CardModality = 'flashcard' | 'multiple_choice' | 'active' | 'teach_me';
+export type CardModality = 'basic' | 'quiz' | 'active' | 'teach_me';
 
 export interface Profile {
   id: string;
@@ -23,6 +23,13 @@ export interface Conversation {
   title: string;
   created_at: string;
   updated_at: string;
+  card_count?: number;
+}
+
+export interface CardDraft {
+  front: string;
+  back: string;
+  modality: 'basic' | 'quiz';
 }
 
 export interface Message {

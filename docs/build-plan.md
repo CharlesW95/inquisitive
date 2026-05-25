@@ -1,6 +1,6 @@
 # Build Plan
 
-A sequence of 9 focused sessions, each independently executable with a clear exit criterion. The critical path is 1 → 2 → 3 → 4 → 5 → 6; sessions 7 and 8 can flex in order. Auth is deferred to session 9 — all DB queries use a hardcoded `DEV_USER_ID` constant until then, so wiring real auth at the end requires no schema changes.
+A sequence of 10 focused sessions, each independently executable with a clear exit criterion. The critical path is 1 → 2 → 3 → 4 → 5 → 6 → 7; sessions 8 and 9 can flex in order. Auth is deferred to session 10 — all DB queries use a hardcoded `DEV_USER_ID` constant until then, so wiring real auth at the end requires no schema changes.
 
 ---
 
@@ -82,20 +82,68 @@ A sequence of 9 focused sessions, each independently executable with a clear exi
 
 ## Session 5 — Automatic Card Generation
 
-**Goal:** Cards are generated in the background after each AI response and visible inline in the conversation; card counts are wired throughout the app.
+**Goal:** Cards are generated silently in the background after each AI response; card counts are wired throughout the app. Card visibility and editing are deferred to Session 6.
 
-- `lib/ai/card-generation.ts` — prompt + structured output parser for all 4 modalities
+#### Card generation approach
+
+Use a single **Haiku 4.5** call per exchange — cheap, fast, and sufficient for extraction. The model self-gates: if the exchange contains nothing card-worthy it returns an empty array; otherwise it returns 1–2 cards. No separate "should I generate?" pre-check needed.
+
+**Generation trigger:** Fire inside the `onComplete` callback in `streamChatResponse` (same place the assistant message is inserted), immediately after the AI response finishes. Skip generation entirely if the AI response is under ~100 tokens — those are clarifying/acknowledgment turns with no learnable content.
+
+**Generation context:** Pass only the **latest user message + AI response** plus the conversation title. Do not pass full message history — scoping tightly avoids redundant cards, keeps costs flat, and ensures each card maps to a specific exchange.
+
+**Prompt shape:**
+
+> *You are a learning assistant creating flashcards from a conversation exchange.*
+>
+> *Given this exchange from a conversation titled '{title}', generate 0–2 flashcards worth adding to a spaced repetition deck.*
+>
+> *Guidelines for the **front** (the question):*
+> *- Ask about causes, mechanisms, significance, or deeper "why/how" — not surface facts like dates or names*
+> *- Frame it so answering requires genuine understanding, not recall of a single word*
+>
+> *Guidelines for the **back** (the answer):*
+> *- Be concise and direct — no padding or restatement of the question*
+> *- Use bullet points when listing multiple contributing factors or steps*
+> *- Weave in specific names, dates, or facts only where they add concrete meaning*
+>
+> *Set `modality` to `"basic"` for most cards. Use `"quiz"` only when the concept lends itself to a specific right/wrong answer. If nothing in this exchange merits a standalone card, return an empty array.*
+>
+> *Existing cards for this conversation — avoid generating near-duplicates:*
+> *{existingCardFronts — one bullet per front, omit section if none yet}*
+>
+> *Return JSON only: an array of `{ front, back, modality }` objects, or `[]`.*
+
+Return schema: `Array<{ front: string; back: string; modality: 'basic' | 'quiz' }>`. Save nothing and skip incrementing the count when the array is empty.
+
+#### Implementation tasks
+
+- `lib/ai/card-generation.ts` — Haiku 4.5 call with the prompt above; JSON parse + validate response; export `generateCardsForExchange(title, userMessage, aiResponse, existingCardFronts: string[]): Promise<CardDraft[]>`
 - `lib/db/cards.ts` — CRUD for `cards`, `card_schedules` (created alongside each new card), `review_attempts`; all queries scope by `user_id` using `DEV_USER_ID`
 - `lib/db/topics.ts` — upsert topics + join tables
-- Background trigger: after stream complete, call card generation, save cards + initial FSRS schedule
-- `components/domain/GeneratedCard` — inline card chip in conversation (shows count, dismissible)
+- Background trigger in `app/conversation/[id].tsx` — in `streamChatResponse`'s `onComplete`, skip if AI response is short, otherwise call `generateCardsForExchange`, save cards + initial FSRS schedule, then invalidate card count query
 - **Wire card counts** — now that the `cards` table exists, update `getConversations` in `lib/db/conversations.ts` to use `.select('*, cards(count)')` (PostgREST embedded count); add `card_count: number` to the `Conversation` type in `lib/types.ts` (derived at query time, not stored); update `ConversationRow` on the home screen and the nav bar in `app/conversation/[id].tsx` to display the real count
 
-**Exit criteria:** Finish a conversation exchange; cards appear inline; visible in Supabase dashboard; card count in the conversation nav bar and home screen Continue rows reflects the real number of cards.
+**Exit criteria:** Finish a conversation exchange; cards are visible in Supabase dashboard; card count in the conversation nav bar and home screen Continue rows increments correctly. No card UI in the conversation yet.
 
 ---
 
-## Session 6 — Review Screen & FSRS
+## Session 6 — In-Conversation Card Review & Editing
+
+**Goal:** Users can see, edit, and delete the cards generated from a conversation without leaving it.
+
+- **Card list panel** — tapping the stack icon in the conversation nav bar opens a bottom sheet (or slide-over) listing all cards for this conversation; each row shows the card front, modality badge, and edit/delete actions
+- `hooks/useConversationCards.ts` — TanStack Query wrapper for fetching all cards linked to a conversation, ordered by `created_at`
+- `components/domain/CardRow` — single row in the card list: front text (truncated), modality badge (`BASIC` / `QUIZ`), edit icon, delete icon
+- `components/domain/CardEditSheet` — bottom sheet with two text inputs (front / back), save and cancel actions; updates the card in Supabase on save and invalidates the card list query
+- Delete action: confirm-on-press (single tap deletes with undo toast, or two-tap confirm — pick one and stay consistent); removes card from `cards` table, decrements count
+- Card count in the nav bar updates reactively as cards are added, edited, or deleted
+
+**Exit criteria:** After a conversation exchange generates cards, tapping the nav bar icon shows the card list; a card can be edited and saved; a card can be deleted; the nav bar count stays in sync.
+
+---
+
+## Session 7 — Review Screen & FSRS
 
 **Goal:** Due cards surface for review; answering updates the FSRS schedule.
 
@@ -109,7 +157,7 @@ A sequence of 9 focused sessions, each independently executable with a clear exi
 
 ---
 
-## Session 7 — Library Screen
+## Session 8 — Library Screen
 
 **Goal:** Users can browse all their cards and conversations, organized by topic.
 
@@ -121,7 +169,7 @@ A sequence of 9 focused sessions, each independently executable with a clear exi
 
 ---
 
-## Session 8 — Home Screen Live Data + End-to-End Polish
+## Session 9 — Home Screen Live Data + End-to-End Polish
 
 **Goal:** Home screen shows real data for all remaining sections; full user flow works end-to-end.
 
@@ -134,7 +182,7 @@ A sequence of 9 focused sessions, each independently executable with a clear exi
 
 ---
 
-## Session 9 — Auth Flow
+## Session 10 — Auth Flow
 
 **Goal:** Real user auth replaces the `DEV_USER_ID` stub; app is ready for multiple users.
 

@@ -15,7 +15,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
+import Markdown from 'react-native-markdown-display';
 import { useConversationCards, useDeleteCard } from '@/hooks/useCards';
+import { cardAnswerMarkdownStyles } from '@/constants/typography';
 import type { Card } from '@/lib/types';
 
 function DeleteModal({
@@ -128,7 +130,7 @@ export default function CardsScreen() {
                 />
               </View>
               <View style={styles.cardRule} />
-              <Text style={styles.cardBack}>{card.answer}</Text>
+              <Markdown style={cardAnswerMarkdownStyles}>{card.answer}</Markdown>
             </View>
           ))}
         </ScrollView>
@@ -311,12 +313,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.border,
     marginVertical: 12,
-  },
-  cardBack: {
-    fontFamily: 'Fraunces',
-    fontSize: 15,
-    color: colors.textSecondary,
-    lineHeight: 22,
   },
   bottomBar: {
     paddingHorizontal: 16,

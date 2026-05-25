@@ -128,18 +128,82 @@ Return schema: `Array<{ front: string; back: string; modality: 'basic' | 'quiz' 
 
 ---
 
-## Session 6 — In-Conversation Card Review & Editing
+## Session 6 — Card List, Create & Edit
 
-**Goal:** Users can see, edit, and delete the cards generated from a conversation without leaving it.
+**Goal:** Users can view, create, edit, and delete cards linked to a conversation via a dedicated card list screen and card form screen.
 
-- **Card list panel** — tapping the stack icon in the conversation nav bar opens a bottom sheet (or slide-over) listing all cards for this conversation; each row shows the card front, modality badge, and edit/delete actions
-- `hooks/useConversationCards.ts` — TanStack Query wrapper for fetching all cards linked to a conversation, ordered by `created_at`
-- `components/domain/CardRow` — single row in the card list: front text (truncated), modality badge (`BASIC` / `QUIZ`), edit icon, delete icon
-- `components/domain/CardEditSheet` — bottom sheet with two text inputs (front / back), save and cancel actions; updates the card in Supabase on save and invalidates the card list query
-- Delete action: confirm-on-press (single tap deletes with undo toast, or two-tap confirm — pick one and stay consistent); removes card from `cards` table, decrements count
-- Card count in the nav bar updates reactively as cards are added, edited, or deleted
+#### Routing changes
 
-**Exit criteria:** After a conversation exchange generates cards, tapping the nav bar icon shows the card list; a card can be edited and saved; a card can be deleted; the nav bar count stays in sync.
+Rename `app/conversation/[id].tsx` → `app/conversation/[id]/index.tsx` (no logic changes — Expo Router treats these identically). This enables sibling routes under the same dynamic segment.
+
+New screens:
+- `app/conversation/[id]/cards.tsx` — card list screen
+- `app/card/new.tsx` — create card form (receives `conversationId` as a search param)
+- `app/card/[id]/edit.tsx` — edit card form (receives `cardId` in path; `app/card/[id]/index.tsx` reserved for Session 7 review)
+
+#### Data layer
+
+- `lib/db/cards.ts` — add `getConversationCards(conversationId)`, `createCard(conversationId, userId, front, back, modality)`, `updateCard(cardId, front, back)`, `deleteCard(cardId)`; `createCard` also inserts a default `card_schedules` row (FSRS new-card defaults)
+- `hooks/useConversationCards.ts` — TanStack Query wrapper around `getConversationCards`, ordered `created_at` asc; invalidated after create, update, or delete
+
+#### Card list screen — `app/conversation/[id]/cards.tsx`
+
+**Nav bar:** back chevron (left) | `"{N} Cards"` title (center, updates reactively) | no right element
+
+**With cards (ScrollView):** 16px horizontal padding, 12px vertical padding, 12px gap between cards.
+
+Each card item — `colors.surface` background, 12px border radius, 16px padding:
+- Front text: `PlayfairDisplay-Bold`, ~17px, `colors.textPrimary` (white), full text shown (no truncation), flex: 1, right-padded to avoid overlap with menu icon
+- `···` menu icon: top-right, `colors.textMuted`; tapping opens a small inline popover (dark surface, 8px radius) anchored below the icon with two rows:
+  - `✏️ Edit` — navigates to `app/card/[id]/edit.tsx`
+  - `🗑️ Delete` — opens the delete confirmation modal (see below)
+- Thin horizontal rule (~1px, `colors.border`) between front and back
+- Back text: `PlayfairDisplay`, ~15px, `colors.textSecondary` (muted), full text shown
+
+**Empty state (0 cards):** vertically and horizontally centered between nav bar and bottom button:
+- Stack/layers icon (`square.stack`) in a circular `colors.accentSubtle` badge (~60px)
+- `"No cards yet"` — `PlayfairDisplay-Bold`, ~22px, `colors.textPrimary`
+- `"As you have a conversation, cards will automatically be created here. You can also create your own cards."` — Inter, ~14px, `colors.textSecondary`, centered, max-width 260px
+
+**Bottom button (both states):** `"＋ New card"` — full width minus 32px horizontal margin, 52px tall, `colors.accent` (yellow) background, `colors.background` text, Inter-SemiBold, pill radius (26px), pinned above safe area; navigates to `app/card/new.tsx?conversationId={id}`
+
+#### Delete confirmation modal
+
+Native-style `Modal` over a semi-transparent dark overlay. Centered dialog — `colors.surface` background, 16px radius, 280px wide, 24px padding:
+- Title: `"Are you sure?"` — `PlayfairDisplay-Bold`, ~20px, `colors.textPrimary`, centered
+- Subtitle: `"This action cannot be undone."` — Inter, ~14px, `colors.textSecondary`, centered, 8px below title
+- Thin horizontal rule below subtitle
+- Two buttons side-by-side, separated by a vertical rule:
+  - Left: `"Cancel"` — Inter-SemiBold, `colors.textPrimary`
+  - Right: `"Yes"` — Inter-SemiBold, `#E05252` (red/destructive)
+- `"Yes"` calls `deleteCard`, invalidates card list query, dismisses modal
+
+#### Create card screen — `app/card/new.tsx`
+
+**Nav bar:** back chevron (left) | `"New card"` (center) | `"✓ Save"` (right, `colors.accent`, disabled/muted when either field is empty)
+
+**Body (no scroll needed for MVP):**
+- **QUESTION section:**
+  - Label: `"QUESTION"` — Inter, 11px, uppercase, letter-spaced, `colors.accent`
+  - `TextInput`: placeholder `"What's the question on the front of the card?"` — `PlayfairDisplay`, ~20px, `colors.textPrimary`, multiline, no border, auto-expands; **max 200 characters**
+  - Character counter shown below the input only when ≥ 160 characters typed (e.g. `"180 / 200"`), Inter 11px, `colors.textMuted`; turns `#E05252` at the limit
+  - Thin horizontal rule below
+- **ANSWER section:**
+  - Label: `"ANSWER"` — Inter, 11px, uppercase, letter-spaced, `colors.textMuted`
+  - `TextInput`: placeholder `"What's the answer or explanation?"` — `PlayfairDisplay`, ~17px, `colors.textPrimary`, multiline, no border, auto-expands; **max 500 characters**
+  - Character counter shown below the input only when ≥ 400 characters typed (e.g. `"420 / 500"`), same style as above
+
+Tapping `"✓ Save"` calls `createCard` with the `conversationId` param, then navigates back to the card list; card list query is invalidated so the new card appears immediately.
+
+#### Edit card screen — `app/card/[id]/edit.tsx`
+
+Identical layout to Create card, with these differences:
+- Nav title: `"Edit card"`
+- Fields pre-populated with the card's existing `front` and `back`
+- Below the answer input, ~24px gap: `"🗑️ Delete this card"` — trash icon + Inter ~13px `colors.textMuted` text, tappable; opens the same delete confirmation modal; on confirm, deletes card, navigates back to card list
+- `"✓ Save"` calls `updateCard`, then navigates back to card list; card list query invalidated
+
+**Exit criteria:** Tapping the nav bar stack icon from a conversation opens the card list; card count in the title matches the nav bar count; a new card can be created and appears in the list; a card can be edited and the change persists; deleting a card via either the `···` menu or the edit screen shows the confirmation modal, removes the card from the list, and decrements the nav bar count in the conversation screen.
 
 ---
 

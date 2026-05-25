@@ -65,3 +65,69 @@ export async function insertCards(
 
   return cards as Card[];
 }
+
+export async function getConversationCards(conversationId: string): Promise<Card[]> {
+  const { data, error } = await supabase
+    .from('cards')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Card[];
+}
+
+export async function createCard(
+  userId: string,
+  conversationId: string,
+  front: string,
+  back: string,
+): Promise<Card> {
+  const { data: cards, error: cardsError } = await supabase
+    .from('cards')
+    .insert({
+      user_id: userId,
+      conversation_id: conversationId,
+      prompt: front,
+      answer: back,
+      modality: 'basic',
+    })
+    .select();
+  if (cardsError) throw cardsError;
+  const card = cards[0] as Card;
+
+  const now = new Date().toISOString();
+  const { error: schedError } = await supabase.from('card_schedules').insert({
+    card_id: card.id,
+    user_id: userId,
+    due: now,
+    stability: 0,
+    difficulty: 0,
+    elapsed_days: 0,
+    scheduled_days: 0,
+    learning_steps: 0,
+    reps: 0,
+    lapses: 0,
+    state: 0,
+    last_review: null,
+  });
+  if (schedError) throw schedError;
+
+  return card;
+}
+
+export async function updateCard(cardId: string, front: string, back: string): Promise<void> {
+  const { error } = await supabase
+    .from('cards')
+    .update({ prompt: front, answer: back, updated_at: new Date().toISOString() })
+    .eq('id', cardId);
+  if (error) throw error;
+}
+
+export async function deleteCard(cardId: string): Promise<void> {
+  const { error } = await supabase
+    .from('cards')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', cardId);
+  if (error) throw error;
+}

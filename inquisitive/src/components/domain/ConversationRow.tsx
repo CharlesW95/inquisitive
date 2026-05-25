@@ -19,7 +19,7 @@ export function ConversationRow({ conversation, onPress }: ConversationRowProps)
     >
       <View className="flex-1 mr-4">
         <Text
-          className="font-sans-semibold text-text-primary"
+          className="font-serif-bold text-text-primary"
           style={{ fontSize: 17 }}
         >
           {conversation.title}

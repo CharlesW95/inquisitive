@@ -11,8 +11,10 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
+import Markdown from 'react-native-markdown-display';
 import { Rating } from 'ts-fsrs';
 import { colors } from '@/constants/colors';
+import { sessionAnswerMarkdownStyles, sessionQuestionMarkdownStyles } from '@/constants/typography';
 import { DEV_USER_ID } from '@/constants/dev';
 import { useDueCards } from '@/hooks/useDueCards';
 import { useSubmitRating } from '@/hooks/useCardReview';
@@ -238,13 +240,13 @@ export default function ReviewSessionScreen() {
         <Text style={styles.dueLabel}>{formatDueLabel(currentCard.schedule.due)}</Text>
 
         {/* Question */}
-        <Text style={styles.question}>{currentCard.prompt}</Text>
+        <Markdown style={sessionQuestionMarkdownStyles}>{currentCard.prompt}</Markdown>
 
         {phase === 'answer' && (
           <>
             <View style={styles.divider} />
             <Text style={styles.answerLabel}>ANSWER</Text>
-            <Text style={styles.answer}>{currentCard.answer}</Text>
+            <Markdown style={sessionAnswerMarkdownStyles}>{currentCard.answer}</Markdown>
           </>
         )}
       </ScrollView>

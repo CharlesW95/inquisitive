@@ -1,19 +1,21 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  FlatList,
   Modal,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
-
 import { colors } from '@/constants/colors';
+import { cardQuestionMarkdownStyles } from '@/constants/typography';
 import { DEV_USER_ID } from '@/constants/dev';
-import { useDueCards } from '@/hooks/useDueCards';
+import { useAllCardsPaginated, useDueCards } from '@/hooks/useDueCards';
 import { useDeleteCard } from '@/hooks/useCards';
 import type { DueCard } from '@/lib/db/cards';
 
@@ -97,11 +99,17 @@ export default function CardExplorerScreen() {
   const [deleteTarget, setDeleteTarget] = useState<DueCard | null>(null);
 
   const { data: dueCards = [] } = useDueCards(DEV_USER_ID);
+  const { data: allPages, fetchNextPage, hasNextPage, isFetchingNextPage } = useAllCardsPaginated(DEV_USER_ID);
   const deleteCard = useDeleteCard();
 
-  const now = new Date().toISOString();
-  const dueOnly = dueCards.filter((c) => c.schedule.due <= now);
-  const displayCards = filter === 'due' ? dueOnly : dueCards;
+  const allCards = useMemo(() => allPages?.pages.flat() ?? [], [allPages]);
+  const displayCards = filter === 'due' ? dueCards : allCards;
+
+  function handleEndReached() {
+    if (filter === 'all' && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }
 
   async function handleConfirmDelete() {
     if (!deleteTarget) return;
@@ -139,46 +147,52 @@ export default function CardExplorerScreen() {
       </View>
 
       {/* Card list */}
-      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-        {displayCards.length === 0 ? (
+      <FlatList
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        data={displayCards}
+        keyExtractor={(item) => item.id}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.3}
+        ListEmptyComponent={
           <Text style={styles.emptyText}>
             {filter === 'due' ? 'No cards due for review.' : 'No cards yet.'}
           </Text>
-        ) : (
-          displayCards.map((card) => (
-            <TouchableOpacity
-              key={card.id}
-              style={styles.cardItem}
-              onPress={() => router.push({ pathname: '/review/session' as any, params: { startCardId: card.id } })}
-              activeOpacity={0.7}
-            >
-              <View style={styles.cardItemRow}>
-                <Text style={styles.cardTopic} numberOfLines={1}>
-                  {card.conversationTitle?.toUpperCase() ?? 'CARD'}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setPopoverCard(card)}
-                  hitSlop={8}
-                >
-                  <Text style={styles.moreBtn}>···</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.cardDue}>{formatDueDateLabel(card.schedule.due)}</Text>
-              <Text style={styles.cardQuestion}>{card.prompt}</Text>
-            </TouchableOpacity>
-          ))
+        }
+        ListFooterComponent={
+          isFetchingNextPage && filter === 'all'
+            ? <ActivityIndicator color={colors.textMuted} style={styles.loadingMore} />
+            : null
+        }
+        renderItem={({ item: card }) => (
+          <TouchableOpacity
+            style={styles.cardItem}
+            onPress={() => router.push({ pathname: '/review/session' as any, params: { startCardId: card.id } })}
+            activeOpacity={0.7}
+          >
+            <View style={styles.cardItemRow}>
+              <Text style={styles.cardTopic} numberOfLines={1}>
+                {card.conversationTitle?.toUpperCase() ?? 'CARD'}
+              </Text>
+              <TouchableOpacity onPress={() => setPopoverCard(card)} hitSlop={8}>
+                <Text style={styles.moreBtn}>···</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.cardDue}>{formatDueDateLabel(card.schedule.due)}</Text>
+            <Markdown style={cardQuestionMarkdownStyles}>{card.prompt}</Markdown>
+          </TouchableOpacity>
         )}
-      </ScrollView>
+      />
 
       {/* Bottom CTA */}
       <View style={[styles.bottomCta, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
-          style={[styles.goldPill, dueOnly.length === 0 && styles.goldPillDisabled]}
+          style={[styles.goldPill, dueCards.length === 0 && styles.goldPillDisabled]}
           onPress={() => router.push('/review/session' as any)}
-          disabled={dueOnly.length === 0}
+          disabled={dueCards.length === 0}
         >
-          <Text style={[styles.goldPillText, dueOnly.length === 0 && styles.goldPillTextDisabled]}>
-            Review due cards ({dueOnly.length})
+          <Text style={[styles.goldPillText, dueCards.length === 0 && styles.goldPillTextDisabled]}>
+            Review due cards ({dueCards.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -307,6 +321,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: 40,
+  },
+  loadingMore: {
+    marginVertical: 20,
   },
   bottomCta: {
     paddingHorizontal: 20,

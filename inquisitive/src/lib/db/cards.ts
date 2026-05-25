@@ -133,6 +133,29 @@ export async function deleteCard(cardId: string): Promise<void> {
   if (error) throw error;
 }
 
+export const ALL_CARDS_PAGE_SIZE = 20;
+
+export async function getAllCards(userId: string, page: number = 0): Promise<DueCard[]> {
+  const from = page * ALL_CARDS_PAGE_SIZE;
+  const to = from + ALL_CARDS_PAGE_SIZE - 1;
+  const { data, error } = await supabase
+    .from('card_schedules')
+    .select('*, cards!inner(*, conversations(title))')
+    .eq('user_id', userId)
+    .order('due', { ascending: true })
+    .range(from, to);
+  if (error) throw error;
+
+  return (data ?? [])
+    .map((row: any) => {
+      const { cards: cardData, ...scheduleData } = row;
+      if (!cardData || cardData.deleted_at) return null;
+      const { conversations, ...card } = cardData;
+      return { ...card, schedule: scheduleData as CardSchedule, conversationTitle: conversations?.title ?? null };
+    })
+    .filter(Boolean) as DueCard[];
+}
+
 export async function getDueCards(userId: string): Promise<DueCard[]> {
   const now = new Date().toISOString();
 

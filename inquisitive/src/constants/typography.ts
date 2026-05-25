@@ -28,6 +28,69 @@ const cardAnswerBase = {
   color: '#888884',
 };
 
+const SESSION_TEXT_PRIMARY = '#F0EFE8';
+
+const sessionQuestionBase = {
+  fontFamily: 'Fraunces',
+  fontSize: 22,
+  lineHeight: 30,
+  color: SESSION_TEXT_PRIMARY,
+};
+
+export const sessionQuestionMarkdownStyles = {
+  body: sessionQuestionBase,
+  strong: { fontFamily: 'Fraunces-Bold', fontWeight: undefined as undefined },
+  em: { fontFamily: 'Fraunces', fontStyle: 'italic' as const },
+  paragraph: { marginBottom: 0, marginTop: 0 },
+};
+
+const sessionAnswerBase = {
+  fontFamily: 'Fraunces',
+  fontSize: 17,
+  lineHeight: 26,
+  color: SESSION_TEXT_PRIMARY,
+};
+
+export const sessionAnswerMarkdownStyles = {
+  body: sessionAnswerBase,
+  strong: { fontFamily: 'Fraunces-Bold', fontWeight: undefined as undefined },
+  em: { fontFamily: 'Fraunces', fontStyle: 'italic' as const },
+  paragraph: { marginBottom: 8, marginTop: 0 },
+  bullet_list: { marginVertical: 4 },
+  list_item: sessionAnswerBase,
+  heading1: sessionAnswerBase,
+  heading2: sessionAnswerBase,
+  heading3: sessionAnswerBase,
+};
+
+const cardQuestionBase = {
+  fontFamily: 'Fraunces',
+  fontSize: 17,
+  lineHeight: 24,
+  color: SESSION_TEXT_PRIMARY,
+};
+
+export const cardQuestionMarkdownStyles = {
+  body: cardQuestionBase,
+  strong: { fontFamily: 'Fraunces-Bold', fontWeight: undefined as undefined },
+  em: { fontFamily: 'Fraunces', fontStyle: 'italic' as const },
+  paragraph: { marginBottom: 0, marginTop: 0 },
+};
+
+const reviewCardQuestionBase = {
+  fontFamily: 'Fraunces',
+  fontSize: 14,
+  lineHeight: 20,
+  color: SESSION_TEXT_PRIMARY,
+};
+
+export const reviewCardQuestionMarkdownStyles = {
+  body: reviewCardQuestionBase,
+  strong: { fontFamily: 'Fraunces-Bold', fontWeight: undefined as undefined },
+  em: { fontFamily: 'Fraunces', fontStyle: 'italic' as const },
+  paragraph: { marginBottom: 0, marginTop: 0 },
+};
+
 export const cardAnswerMarkdownStyles = {
   body: cardAnswerBase,
   strong: { fontFamily: 'Fraunces-Bold', fontWeight: undefined as undefined },
@@ -45,26 +108,26 @@ export const cardAnswerMarkdownStyles = {
 
 export const typography = {
   sizes: {
-    xs:   11,
-    sm:   13,
+    xs: 11,
+    sm: 13,
     base: 15,
-    md:   17,
-    xl:   28,
-    xxl:  36,
+    md: 17,
+    xl: 28,
+    xxl: 36,
   },
   weights: {
-    regular:  "400" as const,
-    medium:   "500" as const,
+    regular: "400" as const,
+    medium: "500" as const,
     semibold: "600" as const,
-    bold:     "700" as const,
+    bold: "700" as const,
   },
   letterSpacing: {
     normal: 0,
-    wide:   0.8,
-    wider:  1.2,
+    wide: 0.8,
+    wider: 1.2,
   },
   fonts: {
-    sans:  "Inter",
+    sans: "Inter",
     serif: "Fraunces",
   },
 } as const;

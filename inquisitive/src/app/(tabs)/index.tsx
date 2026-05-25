@@ -3,12 +3,23 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "expo-symbols";
 import { colors } from "@/constants/colors";
+import { DEV_USER_ID } from "@/constants/dev";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ChatBar } from "@/components/ui/ChatBar";
 import { ReviewCard } from "@/components/domain/ReviewCard";
 import { ExploreCard } from "@/components/domain/ExploreCard";
 import { ConversationRow } from "@/components/domain/ConversationRow";
 import { useRecentConversations } from "@/hooks/useConversations";
+import { useDueCards } from "@/hooks/useDueCards";
+
+function formatDueLabel(due: string): string {
+  const now = new Date();
+  const dueDate = new Date(due);
+  const diffDays = Math.round((dueDate.getTime() - now.getTime()) / 86_400_000);
+  if (diffDays < 0) return 'OVERDUE';
+  if (diffDays === 0) return 'DUE TODAY';
+  return `DUE IN ${diffDays} DAY${diffDays === 1 ? '' : 'S'}`;
+}
 
 function formatRelativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -34,31 +45,6 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
     return chunks;
   }, [] as T[][]);
 }
-
-const REVIEW_CARDS = [
-  {
-    id: "1",
-    modality: "flashcard",
-    topicTag: "STOIC PHILOSOPHY",
-    prompt: "What is the Stoic concept of the dichotomy of control?",
-    dueLabel: "DUE TODAY",
-  },
-  {
-    id: "2",
-    modality: "multiple_choice",
-    topicTag: "ROMAN HISTORY",
-    prompt:
-      "Which Roman emperor initiated the period known as the Five Good Emperors?",
-    dueLabel: "DUE TODAY",
-  },
-  {
-    id: "3",
-    modality: "active",
-    topicTag: "PHILOSOPHY OF MIND",
-    prompt: "Explain the hard problem of consciousness in your own words.",
-    dueLabel: "DUE IN 2 DAYS",
-  },
-];
 
 const EXPLORE_TOPICS = [
   {
@@ -108,6 +94,8 @@ export default function HomeScreen() {
   const exploreCardWidth = (screenWidth - 20 * 2 - 12) / 2;
   const exploreRows = chunkArray(EXPLORE_TOPICS, 2);
   const { data: recentConversations, isLoading: conversationsLoading } = useRecentConversations();
+  const { data: dueCards, isLoading: dueCardsLoading } = useDueCards(DEV_USER_ID);
+  const reviewCards = (dueCards ?? []).slice(0, 5);
 
   return (
     <View
@@ -139,10 +127,10 @@ export default function HomeScreen() {
       {/* Scrollable Content */}
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Section 1 — Greeting */}
-        <View className="px-5 pt-4" style={{ marginBottom: 40 }}>
+        <View className="px-5 pt-4" style={{ marginBottom: 20 }}>
           <Text
             className="font-serif-bold text-text-primary"
-            style={{ fontSize: 36 }}
+            style={{ fontSize: 24 }}
           >
             {getGreeting()}, Charles.
           </Text>
@@ -155,25 +143,41 @@ export default function HomeScreen() {
         </View>
 
         {/* Section 2 — Review */}
-        <View style={{ marginBottom: 40 }}>
-          <View className="px-5 mb-4">
-            <SectionHeader
-              title="Review"
-              subtitle="Engage with knowledge you've explored to deepen your understanding"
-              ctaLabel="SEE ALL ›"
-              onCtaPress={() => router.push("/(tabs)/review")}
-            />
+        {(dueCardsLoading || reviewCards.length > 0) && (
+          <View style={{ marginBottom: 40 }}>
+            <View className="px-5 mb-4">
+              <SectionHeader
+                title="Review"
+                subtitle="Engage with knowledge you've explored"
+                ctaLabel="SEE ALL ›"
+                onCtaPress={() => router.push("/review/explorer" as any)}
+              />
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingLeft: 20, paddingRight: 20, gap: 12 }}
+            >
+              {dueCardsLoading ? (
+                <ActivityIndicator color={colors.textMuted} style={{ marginLeft: 8, marginTop: 60 }} />
+              ) : (
+                reviewCards.map((card) => (
+                  <ReviewCard
+                    key={card.id}
+                    card={{
+                      id: card.id,
+                      modality: card.modality,
+                      topicTag: card.conversationTitle?.toUpperCase() ?? 'CARD',
+                      prompt: card.prompt,
+                      dueLabel: formatDueLabel(card.schedule.due),
+                    }}
+                    onPress={() => router.push({ pathname: '/review/session' as any, params: { startCardId: card.id } })}
+                  />
+                ))
+              )}
+            </ScrollView>
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingLeft: 20, paddingRight: 20, gap: 12 }}
-          >
-            {REVIEW_CARDS.map((card) => (
-              <ReviewCard key={card.id} card={card} onPress={() => {}} />
-            ))}
-          </ScrollView>
-        </View>
+        )}
 
         {/* Section 3 — Explore */}
         <View className="px-5" style={{ marginBottom: 40 }}>
@@ -189,7 +193,7 @@ export default function HomeScreen() {
                     key={topic.id}
                     card={topic}
                     width={exploreCardWidth}
-                    onPress={() => {}}
+                    onPress={() => { }}
                   />
                 ))}
               </View>

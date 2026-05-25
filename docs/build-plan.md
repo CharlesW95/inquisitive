@@ -1,6 +1,6 @@
 # Build Plan
 
-A sequence of 11 focused sessions, each independently executable with a clear exit criterion. The critical path is 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8; sessions 9 and 10 can flex in order. Auth is deferred to session 11 — all DB queries use a hardcoded `DEV_USER_ID` constant until then, so wiring real auth at the end requires no schema changes.
+A sequence of 10 focused sessions, each independently executable with a clear exit criterion. The critical path is 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9; session 9 can flex after 8. Auth is deferred to session 10 — all DB queries use a hardcoded `DEV_USER_ID` constant until then, so wiring real auth at the end requires no schema changes.
 
 ---
 
@@ -263,44 +263,104 @@ Concrete additions to the system prompt:
 
 ## Session 8 — Review Screen & FSRS
 
-**Goal:** Due cards surface for review; answering updates the FSRS schedule.
+**Goal:** Due cards surface for review; answering updates the FSRS schedule correctly. This session covers the backend scheduler, the queue-based review session screen, and the card explorer screen. The homescreen review section is wired to real data.
 
-- `lib/srs/scheduler.ts` — `ts-fsrs` wrapper: `getNextSchedule(card, rating)` → next due date
-- `hooks/useDueCards.ts` — fetch `card_schedules` where `due <= now()`
-- `hooks/useCardReview.ts` — mutation: write `review_attempts`, upsert `card_schedules`
-- `app/(tabs)/review.tsx` — "X cards due" CTA, launches review session
-- `app/card/[id].tsx` — single card review: all 4 modalities (flashcard self-score, multiple choice, active text input with LLM scoring, teach-me with LLM feedback)
+#### Schema migrations (run before any code changes)
 
-**Exit criteria:** Complete a review session; re-fetch shows updated due dates.
+Two fixes to the schema created in Session 5:
+
+- **Drop `learning_steps` from `card_schedules`** — this column is an SM-2 concept and is not part of the FSRS data model; ts-fsrs does not use it
+- **Add `fsrs_log jsonb` to `review_attempts`** — every ts-fsrs scheduling call returns a log object capturing the full state transition; store it verbatim so the review history is auditable and the schedule can be recalculated if FSRS parameters change later
+
+#### Scheduler — `lib/srs/scheduler.ts`
+
+ts-fsrs wrapper with two exports:
+- `getSchedulingOptions(card: CardSchedule)` — calls `f.repeat(card, now)` and returns all four outcomes (Again / Hard / Good / Easy) with their resulting due dates; used by the review UI to show interval previews on rating buttons before the user chooses
+- `applyRating(card: CardSchedule, rating: 1|2|3|4): { next: CardSchedule; log: object }` — applies the chosen rating and returns the updated card state and the raw ts-fsrs log to be persisted
+- Note: `elapsed_days` is recomputed by ts-fsrs internally from `last_review` — do not pass it manually
+
+#### Data layer
+
+- `lib/db/cards.ts` — add two functions:
+  - `getDueCards(userId)` — fetches `cards` joined with `card_schedules` and `conversations` (for title as topic label). Returns two buckets in order: Review/Relearning cards (`state IN (1, 3)` AND `due <= now()`, up to 100, ordered `due ASC`) followed by New cards (`state = 0`, up to 20). Return type: `Array<Card & { schedule: CardSchedule; conversationTitle: string | null }>`
+  - `recordReviewAttempt(cardId, userId, rating, updatedSchedule, fsrsLog)` — upserts `card_schedules` row and inserts a row into `review_attempts` including `fsrs_log`
+- `hooks/useDueCards.ts` — TanStack Query wrapper around `getDueCards`. Query key: `['dueCards', userId]`. Invalidated after each rating submission.
+- `hooks/useCardReview.ts` — mutation that calls `applyRating` from scheduler, then calls `recordReviewAttempt`. On success, invalidates `['dueCards']`.
+
+#### Review session screen — `app/review/session.tsx`
+
+**Route params:** `startCardId?: string` — if provided, reorder the due-card queue so that card appears first.
+
+**State:** `queue: DueCard[]`, `currentIndex: number`, `phase: 'question' | 'answer'`, `schedulingOptions` (computed from `getSchedulingOptions` for the current card before the user rates).
+
+**Layout — question phase:**
+- Top bar: `×` button (`colors.textMuted`, navigates back) | gold progress bar (proportional fill) | `"X / N"` counter (Inter, 13px, `colors.textMuted`)
+- Topic row: conversation title uppercased (`colors.accent`, 11px, letter-spaced) on left | `···` on right (`colors.textMuted`)
+- `···` popover (dark surface, 8px radius): `✏️ Edit` → `app/card/[id]/edit.tsx` | `🗑️ Delete` → confirmation modal, then advance queue
+- Question text: Fraunces-Bold, ~28px, `colors.textPrimary`, no truncation
+- Bottom: `"Reveal answer"` full-width gold pill (52px, sets `phase = 'answer'`), then `"Skip this card  >"` small text link (`colors.textMuted`, pushes card to end of queue and advances)
+
+**Layout — answer phase (matches screenshot):**
+- Thin divider (`colors.border`) below question
+- `"ANSWER"` label: Inter, 11px, uppercase, letter-spaced, `colors.textMuted`
+- Answer text: Fraunces, ~17px, `colors.textPrimary`
+- Bottom: 4 rating buttons side-by-side (equal width, square-ish, `colors.surface` bg, ~12px radius), then `"Skip this card  >"` text link below them
+  - Each button top: colored dot (12px circle) — red (Again), orange (Hard), yellow-gold (Good), green (Easy)
+  - Label: Inter-SemiBold, ~15px, `colors.textPrimary`
+  - Interval shorthand below: Inter, ~12px, `colors.textMuted` — e.g. `"<1m"`, `"6m"`, `"10m"`, `"4d"` — computed from `getSchedulingOptions`; use minutes (`Nm`), days (`Nd`), months (`Nmo`) shorthand
+  - `"Reveal answer"` pill is gone in answer phase
+  - Tapping a rating button calls `useSubmitRating`, then advances to next card
+
+**Session complete state:** centered completion view with checkmark icon, `"All done!"` (Fraunces-Bold, ~24px), `"N cards reviewed"` (Inter, ~14px), `"Back to home"` gold pill navigating to `/(tabs)/`.
+
+#### Card explorer screen — `app/review/explorer.tsx`
+
+**Nav bar:** back chevron | `"Cards"` (center) | no right element
+
+**Toggle (below nav):** `"Due"` | `"All"` pill toggle; `colors.accent` bg when active, `colors.surface` otherwise. `"Due"` selected by default and shows only cards where `due <= now()`.
+
+**Card list item:**
+- First row: topic (conversation title, uppercased, `colors.accent`, 11px, letter-spaced) left | `···` right
+- Second row: due date label (`colors.textMuted`, 12px) — `"Overdue"` / `"Due today"` / `"Due in N days"`
+- Question text: Fraunces-Bold, ~17px, `colors.textPrimary`, full text (no truncation)
+- No answer shown; no divider
+- Tapping a card → `app/review/session.tsx?startCardId={id}`
+- `···` opens same Edit | Delete popover as the review session screen
+
+**Bottom CTA:** `"Review due cards (N)"` full-width gold pill, pinned above safe area; `N` = count of due cards; disabled/muted when N = 0; taps → `app/review/session.tsx` (no `startCardId`, starts from queue beginning).
+
+#### Home screen wiring — `app/(tabs)/index.tsx`
+
+- Replace 3 hardcoded mock ReviewCards with real data from `useDueCards()`, sliced to first 5
+- Loading state: 2–3 skeleton ReviewCard placeholders (grey shimmer)
+- Empty state: hide the Review section entirely when 0 due cards
+- `ReviewCard` `onPress` → `router.push('/review/session?startCardId=${card.id}')`
+- `SectionHeader` "See all" → `router.push('/review/explorer')`
+- `ReviewCard` gets a `topicLabel` prop derived from `conversationTitle?.toUpperCase() ?? 'CARD'`
+- TanStack Query refetches `useDueCards` on window focus, so returning from a session auto-refreshes the list
+
+#### Review tab — `app/(tabs)/review.tsx`
+
+Simple update: show `"X cards due"` count with two CTAs — `"Review now"` pill → `app/review/session.tsx`; `"Browse cards"` text link → `app/review/explorer.tsx`. Full redesign deferred to Session 9 polish.
+
+**Exit criteria:** Tapping a due card on the homescreen launches the review session starting at that card; skip moves a card to end of queue; rating a card upserts `card_schedules` and inserts `review_attempts` with a populated `fsrs_log`; rating buttons show live interval previews; session complete screen appears after all cards are rated; CardExplorer Due/All toggle filters correctly; `card_schedules` contains no `learning_steps` column.
 
 ---
 
-## Session 9 — Library Screen
-
-**Goal:** Users can browse all their cards and conversations, organized by topic.
-
-- `app/(tabs)/library.tsx` — two sections: Conversations list + Cards list; topic filter chips at top
-- Wire existing hooks/db functions (no new data layer needed)
-- Card tap → `app/card/[id].tsx`; conversation tap → `app/conversation/[id].tsx`
-
-**Exit criteria:** Library shows real data from Supabase; topic filter works.
-
----
-
-## Session 10 — Home Screen Live Data + End-to-End Polish
+## Session 9 — Home Screen Live Data + End-to-End Polish
 
 **Goal:** Home screen shows real data for all remaining sections; full user flow works end-to-end.
 
-- Wire home "Review" section to real `useDueCards` count
 - Explore section: hardcoded curated topics (personalization is post-MVP)
 - End-of-conversation flow: modal/banner inviting user to review newly generated cards
 - Loading states, empty states, error toasts throughout
+- Remove or repurpose the `library` tab from the tab bar (CardExplorer at `app/review/explorer.tsx` covers this use case)
 
 **Exit criteria:** Full user flow from cold launch through conversation → cards → review works without hardcoded data.
 
 ---
 
-## Session 11 — Auth Flow
+## Session 10 — Auth Flow
 
 **Goal:** Real user auth replaces the `DEV_USER_ID` stub; app is ready for multiple users.
 

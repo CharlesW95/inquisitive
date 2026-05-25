@@ -119,9 +119,7 @@ One row per card. Created when a card is generated; updated on every review. `us
 | `due` | timestamptz | Next scheduled review date |
 | `stability` | float | FSRS stability value |
 | `difficulty` | float | FSRS difficulty value |
-| `elapsed_days` | int | |
-| `scheduled_days` | int | |
-| `learning_steps` | int | FSRS learning steps counter |
+| `scheduled_days` | int | Interval (days) scheduled at last review |
 | `reps` | int | Total review count |
 | `lapses` | int | Times forgotten |
 | `state` | int | FSRS state enum |

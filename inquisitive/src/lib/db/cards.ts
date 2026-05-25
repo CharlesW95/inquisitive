@@ -1,5 +1,8 @@
 import { supabase } from './client';
-import type { Card, CardDraft } from '@/lib/types';
+import type { Card, CardDraft, CardSchedule } from '@/lib/types';
+import type { NextSchedule } from '@/lib/srs/scheduler';
+
+export type DueCard = Card & { schedule: CardSchedule; conversationTitle: string | null };
 
 export async function getCardFrontsForConversation(conversationId: string): Promise<string[]> {
   const { data, error } = await supabase
@@ -54,7 +57,6 @@ export async function insertCards(
       difficulty: 0,
       elapsed_days: 0,
       scheduled_days: 0,
-      learning_steps: 0,
       reps: 0,
       lapses: 0,
       state: 0,
@@ -105,7 +107,6 @@ export async function createCard(
     difficulty: 0,
     elapsed_days: 0,
     scheduled_days: 0,
-    learning_steps: 0,
     reps: 0,
     lapses: 0,
     state: 0,
@@ -130,4 +131,91 @@ export async function deleteCard(cardId: string): Promise<void> {
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', cardId);
   if (error) throw error;
+}
+
+export const ALL_CARDS_PAGE_SIZE = 20;
+
+export async function getAllCards(userId: string, page: number = 0): Promise<DueCard[]> {
+  const from = page * ALL_CARDS_PAGE_SIZE;
+  const to = from + ALL_CARDS_PAGE_SIZE - 1;
+  const { data, error } = await supabase
+    .from('card_schedules')
+    .select('*, cards!inner(*, conversations(title))')
+    .eq('user_id', userId)
+    .order('due', { ascending: true })
+    .range(from, to);
+  if (error) throw error;
+
+  return (data ?? [])
+    .map((row: any) => {
+      const { cards: cardData, ...scheduleData } = row;
+      if (!cardData || cardData.deleted_at) return null;
+      const { conversations, ...card } = cardData;
+      return { ...card, schedule: scheduleData as CardSchedule, conversationTitle: conversations?.title ?? null };
+    })
+    .filter(Boolean) as DueCard[];
+}
+
+export async function getDueCards(userId: string): Promise<DueCard[]> {
+  const now = new Date().toISOString();
+
+  const [reviewResult, newResult] = await Promise.all([
+    supabase
+      .from('card_schedules')
+      .select('*, cards!inner(*, conversations(title))')
+      .eq('user_id', userId)
+      .in('state', [1, 2, 3])
+      .lte('due', now)
+      .order('due', { ascending: true })
+      .limit(100),
+    supabase
+      .from('card_schedules')
+      .select('*, cards!inner(*, conversations(title))')
+      .eq('user_id', userId)
+      .eq('state', 0)
+      .limit(20),
+  ]);
+
+  if (reviewResult.error) throw reviewResult.error;
+  if (newResult.error) throw newResult.error;
+
+  const toResult = (row: any): DueCard | null => {
+    const { cards: cardData, ...scheduleData } = row;
+    if (!cardData || cardData.deleted_at) return null;
+    const { conversations, ...card } = cardData;
+    return {
+      ...card,
+      schedule: scheduleData as CardSchedule,
+      conversationTitle: conversations?.title ?? null,
+    };
+  };
+
+  return [
+    ...(reviewResult.data ?? []).map(toResult).filter(Boolean),
+    ...(newResult.data ?? []).map(toResult).filter(Boolean),
+  ] as DueCard[];
+}
+
+export async function recordReviewAttempt(
+  cardId: string,
+  userId: string,
+  rating: number,
+  updatedSchedule: NextSchedule,
+  fsrsLog: object,
+): Promise<void> {
+  const { error: schedError } = await supabase
+    .from('card_schedules')
+    .update({ ...updatedSchedule })
+    .eq('card_id', cardId)
+    .eq('user_id', userId);
+  if (schedError) throw schedError;
+
+  const { error: attemptError } = await supabase.from('review_attempts').insert({
+    card_id: cardId,
+    user_id: userId,
+    rating,
+    answered_at: new Date().toISOString(),
+    fsrs_log: fsrsLog,
+  });
+  if (attemptError) throw attemptError;
 }

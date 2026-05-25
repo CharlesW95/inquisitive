@@ -32,21 +32,13 @@ export function ReviewCard({ card, onPress }: ReviewCardProps) {
     >
       <View className="flex-1 p-4 justify-between">
         <View>
-          <View className="flex-row justify-between">
-            <Text
-              className="font-sans text-text-muted uppercase"
-              style={{ fontSize: 11, letterSpacing: 0.8 }}
-            >
-              {MODALITY_LABELS[card.modality] ?? card.modality.toUpperCase()}
-            </Text>
-            <Text
-              className="font-sans text-text-muted uppercase"
-              style={{ fontSize: 11, letterSpacing: 0.8 }}
-            >
-              {card.dueLabel}
-            </Text>
-          </View>
-          <View className="mt-1">
+          <Text
+            className="font-sans text-text-muted uppercase"
+            style={{ fontSize: 11, letterSpacing: 0.8 }}
+          >
+            {card.dueLabel}
+          </Text>
+          <View className="mt-2">
             <TopicTag label={card.topicTag} />
           </View>
           <Text

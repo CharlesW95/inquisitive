@@ -148,7 +148,7 @@ export default function HomeScreen() {
             <View className="px-5 mb-4">
               <SectionHeader
                 title="Review"
-                subtitle="Engage with knowledge you've explored to deepen your understanding"
+                subtitle="Engage with knowledge you've explored"
                 ctaLabel="SEE ALL ›"
                 onCtaPress={() => router.push("/review/explorer" as any)}
               />

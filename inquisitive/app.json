@@ -8,7 +8,8 @@
     "scheme": "inquisitive",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.charleswong95.inquisitive"
     },
     "android": {
       "adaptiveIcon": {

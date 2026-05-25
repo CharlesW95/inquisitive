@@ -17,6 +17,7 @@ import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
 import Markdown from 'react-native-markdown-display';
 import { useConversationCards, useDeleteCard } from '@/hooks/useCards';
+import { useToastStore } from '@/stores/toastStore';
 import { cardAnswerMarkdownStyles } from '@/constants/typography';
 import type { Card } from '@/lib/types';
 
@@ -68,6 +69,7 @@ export default function CardsScreen() {
 
   const { data: cards = [] } = useConversationCards(id);
   const deleteCard = useDeleteCard();
+  const showToast = useToastStore((s) => s.showToast);
 
   const [activeMenu, setActiveMenu] = useState<{
     card: Card;
@@ -88,7 +90,10 @@ export default function CardsScreen() {
 
   function handleConfirmDelete() {
     if (!pendingDeleteCard) return;
-    deleteCard.mutate({ cardId: pendingDeleteCard.id, conversationId: id });
+    deleteCard.mutate(
+      { cardId: pendingDeleteCard.id, conversationId: id },
+      { onError: () => showToast('Failed to delete card', 'error') },
+    );
     setPendingDeleteCard(null);
   }
 

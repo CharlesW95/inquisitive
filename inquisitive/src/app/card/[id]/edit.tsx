@@ -17,6 +17,7 @@ import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
 import { cardAnswerMarkdownStyles } from '@/constants/typography';
 import { useConversationCards, useDeleteCard, useUpdateCard } from '@/hooks/useCards';
+import { useToastStore } from '@/stores/toastStore';
 
 const FRONT_MAX = 200;
 const BACK_MAX = 500;
@@ -79,20 +80,29 @@ export default function EditCardScreen() {
 
   const updateCard = useUpdateCard();
   const deleteCard = useDeleteCard();
+  const showToast = useToastStore((s) => s.showToast);
 
   const canSave = front.trim().length > 0 && back.trim().length > 0;
 
   async function handleSave() {
     if (!canSave || !card) return;
-    await updateCard.mutateAsync({ cardId, conversationId, front, back });
-    router.back();
+    try {
+      await updateCard.mutateAsync({ cardId, conversationId, front, back });
+      router.back();
+    } catch {
+      showToast('Failed to save card', 'error');
+    }
   }
 
   async function handleConfirmDelete() {
     if (!card) return;
     setShowDelete(false);
-    await deleteCard.mutateAsync({ cardId, conversationId });
-    router.back();
+    try {
+      await deleteCard.mutateAsync({ cardId, conversationId });
+      router.back();
+    } catch {
+      showToast('Failed to delete card', 'error');
+    }
   }
 
   return (

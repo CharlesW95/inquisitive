@@ -15,6 +15,40 @@ export async function getConversations(userId: string): Promise<Conversation[]> 
   }));
 }
 
+export async function getConversationsPaged(
+  userId: string,
+  limit: number,
+  offset: number,
+): Promise<Conversation[]> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*, cards(count)')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
+  return data.map((row) => ({
+    ...row,
+    card_count: (row.cards as { count: number }[])[0]?.count ?? 0,
+    cards: undefined,
+  }));
+}
+
+export async function searchConversations(userId: string, query: string): Promise<Conversation[]> {
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('*, cards(count)')
+    .eq('user_id', userId)
+    .ilike('title', `%${query}%`)
+    .order('updated_at', { ascending: false });
+  if (error) throw error;
+  return data.map((row) => ({
+    ...row,
+    card_count: (row.cards as { count: number }[])[0]?.count ?? 0,
+    cards: undefined,
+  }));
+}
+
 export async function getConversation(id: string): Promise<Conversation | null> {
   const { data, error } = await supabase
     .from('conversations')

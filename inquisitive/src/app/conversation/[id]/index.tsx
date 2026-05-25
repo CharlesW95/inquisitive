@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,13 +19,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
 import { insertMessage, updateConversationTitle } from '@/lib/db/conversations';
-import { generateConversationTitle, streamChatResponse } from '@/lib/ai/chat';
+import { generateConversationTitle, streamChatResponse, REFUSAL_TEXT } from '@/lib/ai/chat';
 import { generateCardsForExchange } from '@/lib/ai/card-generation';
 import { generateFollowUpSuggestions } from '@/lib/ai/suggestions';
 import { getCardFrontsForConversation, insertCards } from '@/lib/db/cards';
 import { useConversation, useMessages } from '@/hooks/useConversations';
 import { useCardCount } from '@/hooks/useCards';
 import { DEV_USER_ID } from '@/constants/dev';
+import { useToastStore } from '@/stores/toastStore';
 import { KeepExploring } from '@/components/domain/KeepExploring';
 import { serifBodyMarkdownStyles } from '@/constants/typography';
 import { useSuggestionsStore } from '@/stores/suggestionsStore';
@@ -85,18 +88,20 @@ export default function ConversationScreen() {
   const [inputText, setInputText] = useState('');
   const [streamingText, setStreamingText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
   const [optimisticUserMsg, setOptimisticUserMsg] = useState<Message | null>(null);
+  const showToast = useToastStore((s) => s.showToast);
   const { suggestionsByConversation, setSuggestions: storeSuggestions, clearSuggestions } = useSuggestionsStore();
   const suggestions = suggestionsByConversation[id] ?? [];
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
 
-  const { data: conversation } = useConversation(id);
-  const { data: messages = [] } = useMessages(id);
+  const { data: conversation, isLoading: convLoading } = useConversation(id);
+  const { data: messages = [], isLoading: msgsLoading } = useMessages(id);
   const { data: cardCount = 0 } = useCardCount(id);
+  const isInitialLoad = convLoading || msgsLoading;
 
   const title = conversation?.title || 'New conversation';
 
@@ -119,6 +124,12 @@ export default function ConversationScreen() {
   const hasMessages = messages.length > 0 || isStreaming;
 
   useEffect(() => {
+    const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardWillHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
+  useEffect(() => {
     if (hasMessages) {
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
     }
@@ -129,7 +140,6 @@ export default function ConversationScreen() {
     if (!text || isStreaming) return;
 
     setInputText('');
-    setSendError(null);
     clearSuggestions(id);
     setSuggestionsLoading(false);
 
@@ -191,21 +201,23 @@ export default function ConversationScreen() {
               queryClient.invalidateQueries({ queryKey: ['conversations'] });
             }
           } catch (e) {
-            console.error('Card generation failed:', e);
+            showToast('Card generation failed', 'error');
           }
         });
         setOptimisticUserMsg(null);
         setStreamingText('');
         setIsStreaming(false);
-        setSuggestionsLoading(true);
-        generateFollowUpSuggestions(text, fullText)
-          .then((results) => storeSuggestions(id, results))
-          .catch(() => {})
-          .finally(() => setSuggestionsLoading(false));
+        if (fullText.trim() !== REFUSAL_TEXT) {
+          setSuggestionsLoading(true);
+          generateFollowUpSuggestions(text, fullText)
+            .then((results) => storeSuggestions(id, results))
+            .catch(() => {})
+            .finally(() => setSuggestionsLoading(false));
+        }
       },
       (error) => {
         console.error('Stream error:', error);
-        setSendError('Failed to get a response. Please try again.');
+        showToast('Failed to get a response. Please try again.', 'error');
         setOptimisticUserMsg(null);
         setIsStreaming(false);
       },
@@ -233,10 +245,14 @@ export default function ConversationScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={insets.top + 52}
+        keyboardVerticalOffset={0}
       >
         {/* Message area */}
-        {hasMessages ? (
+        {isInitialLoad ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={colors.textMuted} size="large" />
+          </View>
+        ) : hasMessages ? (
           <ScrollView
             ref={scrollRef}
             style={{ flex: 1 }}
@@ -325,13 +341,8 @@ export default function ConversationScreen() {
           </ScrollView>
         )}
 
-        {/* Error */}
-        {sendError && (
-          <Text style={styles.errorText}>{sendError}</Text>
-        )}
-
         {/* Input Bar */}
-        <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 8 }]}>
+        <View style={[styles.inputContainer, { paddingBottom: keyboardVisible ? 8 : insets.bottom + 8 }]}>
           <View style={styles.inputBar}>
             <TextInput
               ref={inputRef}
@@ -350,11 +361,11 @@ export default function ConversationScreen() {
               hitSlop={8}
               style={styles.inputIcon}
             >
-              {inputText.trim() ? (
-                <SymbolView name="arrow.up.circle.fill" size={28} tintColor={colors.accent} />
-              ) : (
-                <SymbolView name="mic" size={20} tintColor={colors.textMuted} />
-              )}
+              <SymbolView
+                name="arrow.up.circle.fill"
+                size={28}
+                tintColor={inputText.trim() ? colors.accent : colors.textMuted}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -551,7 +562,7 @@ const styles = StyleSheet.create({
   },
   inputBar: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     backgroundColor: colors.surfaceInput,
     borderRadius: 24,
     paddingHorizontal: 16,
@@ -564,20 +575,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
     maxHeight: 96,
+    lineHeight: 20,
+    minHeight: 20,
     padding: 0,
     margin: 0,
   },
   inputIcon: {
     alignSelf: 'flex-end',
     marginBottom: 1,
-  },
-  // Error
-  errorText: {
-    fontFamily: 'Inter',
-    fontSize: 13,
-    color: '#E05252',
-    textAlign: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 4,
   },
 });

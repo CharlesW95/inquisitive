@@ -19,6 +19,7 @@ import { DEV_USER_ID } from '@/constants/dev';
 import { useDueCards } from '@/hooks/useDueCards';
 import { useSubmitRating } from '@/hooks/useCardReview';
 import { useDeleteCard } from '@/hooks/useCards';
+import { useToastStore } from '@/stores/toastStore';
 import { getSchedulingOptions, type SchedulingOption } from '@/lib/srs/scheduler';
 import type { DueCard } from '@/lib/db/cards';
 
@@ -107,6 +108,7 @@ export default function ReviewSessionScreen() {
   const { data: dueCards, isLoading } = useDueCards(DEV_USER_ID);
   const submitRating = useSubmitRating();
   const deleteCard = useDeleteCard();
+  const showToast = useToastStore((s) => s.showToast);
 
   const [queue, setQueue] = useState<DueCard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -142,10 +144,14 @@ export default function ReviewSessionScreen() {
 
   async function handleRate(rating: Rating) {
     if (!currentCard || submitRating.isPending) return;
-    await submitRating.mutateAsync({ card: currentCard, rating });
-    setRatedCount((n) => n + 1);
-    setCurrentIndex((i) => i + 1);
-    setPhase('question');
+    try {
+      await submitRating.mutateAsync({ card: currentCard, rating });
+      setRatedCount((n) => n + 1);
+      setCurrentIndex((i) => i + 1);
+      setPhase('question');
+    } catch {
+      showToast('Failed to save review', 'error');
+    }
   }
 
   function handleSkip() {

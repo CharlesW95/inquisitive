@@ -214,7 +214,7 @@ export default function HomeScreen() {
                     id: convo.id,
                     title: convo.title || "Untitled",
                     timestamp: formatRelativeTime(convo.updated_at),
-                    cardCount: 0,
+                    cardCount: convo.card_count ?? 0,
                   }}
                   onPress={() => router.push(`/conversation/${convo.id}`)}
                 />

@@ -1,7 +1,7 @@
 export const colors = {
-  background:   "#1A1A18",
-  surface:      "#242422",
-  surfaceInput: "#2C2C2A",
+  background:   "#262626",
+  surface:      "#2E2E2E",
+  surfaceInput: "#363636",
 
   textPrimary:   "#F0EFE8",
   textSecondary: "#888884",
@@ -10,5 +10,5 @@ export const colors = {
   accent:       "#C8A84B",
   accentSubtle: "#C8A84B26",
 
-  border: "#333330",
+  border: "#3D3D3D",
 } as const;

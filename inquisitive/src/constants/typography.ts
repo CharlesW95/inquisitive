@@ -1,3 +1,23 @@
+export const serifBodyMarkdownStyles = {
+  body: {
+    fontFamily: 'Fraunces-Light',
+    fontSize: 17,
+    lineHeight: 28,
+    letterSpacing: 0.085,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  strong: { fontFamily: 'Fraunces-Bold', fontWeight: undefined as undefined },
+  paragraph: { marginBottom: 12, marginTop: 0 },
+  bullet_list: { marginVertical: 4 },
+  list_item: {
+    fontFamily: 'Fraunces-Light',
+    fontSize: 17,
+    lineHeight: 28,
+    letterSpacing: 0.085,
+    color: 'rgba(255,255,255,0.85)',
+  },
+};
+
 export const typography = {
   sizes: {
     xs:   11,

@@ -1,6 +1,6 @@
 # Build Plan
 
-A sequence of 10 focused sessions, each independently executable with a clear exit criterion. The critical path is 1 → 2 → 3 → 4 → 5 → 6 → 7; sessions 8 and 9 can flex in order. Auth is deferred to session 10 — all DB queries use a hardcoded `DEV_USER_ID` constant until then, so wiring real auth at the end requires no schema changes.
+A sequence of 11 focused sessions, each independently executable with a clear exit criterion. The critical path is 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8; sessions 9 and 10 can flex in order. Auth is deferred to session 11 — all DB queries use a hardcoded `DEV_USER_ID` constant until then, so wiring real auth at the end requires no schema changes.
 
 ---
 
@@ -207,7 +207,61 @@ Identical layout to Create card, with these differences:
 
 ---
 
-## Session 7 — Review Screen & FSRS
+## Session 7 — Chat UI Redesign + Keep Exploring
+
+**Goal:** Redesign the conversation screen so AI responses feel like editorial prose, not chat bubbles; add a "Keep Exploring" follow-up suggestions panel after the latest AI response.
+
+#### Visual treatment
+
+- **User messages** — keep the existing bubble style (rounded pill, `colors.surface` background, right-aligned)
+- **AI responses** — remove the bubble entirely; render text full-width in `PlayfairDisplay` serif font, left-aligned, floating in space. Timestamp stays below the text in the same muted style. No background, no border, no radius.
+- Padding/spacing between messages should feel generous — treat AI responses as editorial prose, not chat items
+
+#### Keep Exploring panel
+
+Appears below the **most recent AI response only** (not on historical messages). Rendered as part of the message list, directly after that message.
+
+**Layout:**
+- Thin horizontal rule, then `"KEEP EXPLORING"` label — Inter, 11px, uppercase, letter-spaced, `colors.accent` (gold/yellow)
+- 3 numbered follow-up question rows (01, 02, 03); each row: number in `colors.textMuted`, question text in `colors.textPrimary`, `↗` arrow icon on the right; thin horizontal rules between rows
+- Tapping a row pre-fills the chat input with that question (user can edit before sending)
+
+**Data generation — separate Haiku 4.5 call (Option B):**
+
+Fire a **Haiku 4.5** call inside the same `onComplete` callback used for card generation, immediately after the main stream finishes. This mirrors the established card-generation pattern: cheap, async, non-blocking. The main chat prompt is left untouched — the two concerns stay fully decoupled and independently tunable.
+
+Prompt shape:
+> *Given this conversation exchange, suggest 3 short follow-up questions the user might want to ask next to deepen their understanding. Questions should feel genuinely curious — not generic. Return JSON only: `["question 1", "question 2", "question 3"]`.*
+
+~~Store suggestions transiently in component state.~~ **Addendum:** Suggestions are persisted locally via a Zustand store (`src/stores/suggestionsStore.ts`) backed by AsyncStorage, keyed by `conversationId`. They survive navigation and app restarts; they are cleared when the user sends a new message. While suggestions are loading, show 3 grey placeholder rows with a subtle shimmer.
+
+#### Main chat prompt updates
+
+Update the system prompt in `lib/ai/chat.ts` with three additions:
+
+1. **Markdown output** — instruct the model to respond in Markdown. The UI will render it (see implementation tasks below).
+2. **Conciseness + structure** — instruct the model to prefer brevity and to use structural elements (bold headers, bullet lists, tables) where they improve clarity over running prose.
+3. **No trailing question** — explicitly instruct the model not to end its response with a question. Follow-up prompts are handled by the Keep Exploring panel; a question at the end of the prose would duplicate and undercut that feature.
+
+Concrete additions to the system prompt:
+> *Respond in Markdown. Use bold headers, bullet lists, and tables when they improve clarity — prefer structure over long prose. Be concise: say what needs to be said, nothing more. Do not end your response with a question.*
+
+#### Implementation tasks
+
+- Update the system prompt in `lib/ai/chat.ts` with the three additions above
+- Update `app/conversation/[id]/index.tsx`:
+  - Change AI message rendering: remove bubble container, render Markdown via a lightweight library (`react-native-markdown-display`); apply `PlayfairDisplay` serif as the base body font in the Markdown style map; full-width layout
+  - After the last AI message in the `FlatList`, render `<KeepExploring>` component if suggestions are available (or loading)
+  - In `onComplete`, fire `generateFollowUpQuestions(title, userMessage, aiResponse)` in parallel with card generation; store result in `useState`
+- `lib/ai/suggestions.ts` — Haiku 4.5 call; export `generateFollowUpQuestions(title, userMessage, aiResponse): Promise<string[]>`
+- `components/domain/KeepExploring.tsx` — panel component; accepts `questions: string[] | null` (null = loading state); calls `onSelect(question)` prop when a row is tapped
+- Reset suggestions to `null` whenever the user sends a new message (so old suggestions disappear while new ones load)
+
+**Exit criteria:** AI responses render in serif font with no bubble; the Keep Exploring panel appears below the latest AI response with 3 tappable suggestions; tapping one pre-fills the input; sending a new message clears the panel until the next response completes.
+
+---
+
+## Session 8 — Review Screen & FSRS
 
 **Goal:** Due cards surface for review; answering updates the FSRS schedule.
 
@@ -221,7 +275,7 @@ Identical layout to Create card, with these differences:
 
 ---
 
-## Session 8 — Library Screen
+## Session 9 — Library Screen
 
 **Goal:** Users can browse all their cards and conversations, organized by topic.
 
@@ -233,7 +287,7 @@ Identical layout to Create card, with these differences:
 
 ---
 
-## Session 9 — Home Screen Live Data + End-to-End Polish
+## Session 10 — Home Screen Live Data + End-to-End Polish
 
 **Goal:** Home screen shows real data for all remaining sections; full user flow works end-to-end.
 
@@ -246,7 +300,7 @@ Identical layout to Create card, with these differences:
 
 ---
 
-## Session 10 — Auth Flow
+## Session 11 — Auth Flow
 
 **Goal:** Real user auth replaces the `DEV_USER_ID` stub; app is ready for multiple users.
 

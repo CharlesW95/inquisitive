@@ -185,6 +185,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   navButton: {
     width: 56,
@@ -193,7 +195,7 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     flex: 1,
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'Fraunces',
     fontSize: 17,
     color: colors.textPrimary,
     textAlign: 'center',

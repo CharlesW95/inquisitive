@@ -99,6 +99,7 @@ No section header. Two lines of text:
 #### Section 2 — Review
 
 **Section header row** (title left, link right):
+
 - Left: `Review` — section title style (large, bold, white)
 - Below title: `Engage with knowledge you've explored to deepen your understanding` — body-small, muted
 - Right (vertically centered with title): `SEE ALL ›` — uppercase, accent color, tappable; navigates to the full Review tab
@@ -106,6 +107,7 @@ No section header. Two lines of text:
 **Card carousel:** Horizontal `ScrollView`, `pagingEnabled: false`, no scroll indicator. Cards have ~12px gap between them. First card aligns to left padding; right edge of last card bleeds to hint at scroll.
 
 **Review card anatomy** (each card is ~70% of screen width, fixed height ~160px, dark elevated surface `colors.surface`):
+
 - **Top row:** Modality label on left + due label on right
   - Modality label: e.g., `QUIZ`, `ACTIVE RECALL`, `FLASHCARD`, `TEACH ME` — uppercase, body-small, muted
   - Due label: `DUE TODAY` or `DUE IN 2 DAYS` etc. — uppercase, body-small, muted
@@ -120,12 +122,14 @@ Tapping a card navigates to `app/card/[id].tsx` to begin review.
 #### Section 3 — Explore
 
 **Section header** (no right-side link):
+
 - `Explore` — section title style
 - `Discover new knowledge by starting new threads` — body-small, muted
 
 **Topic grid:** 2-column grid with ~12px gap. Each cell is a topic card (equal width, fixed height ~140px, dark elevated surface).
 
 **Explore card anatomy:**
+
 - **Top row:** Topic category label on left + diagonal arrow icon (↗) on right
   - Category: e.g., `PHILOSOPHY OF MIND`, `HISTORY` — uppercase, body-small, accent color
   - Arrow: small icon, muted, indicates "starts new conversation"
@@ -141,12 +145,14 @@ For MVP, Explore cards are hardcoded — a static list of 6–8 curated topics c
 #### Section 4 — Continue
 
 **Section header** (no right-side link):
+
 - `Continue` — section title style
 - `Deepen your exploration by continuing existing threads` — body-small, muted
 
 **Conversation list:** Vertical stack of rows, no dividers, ~4px gap between rows.
 
 **Conversation row anatomy** (full width, ~48px tall):
+
 - **Left:** Conversation title — body-large, bold, white, single line, truncated with `…`
 - **Right (fixed width, right-aligned):**
   - Relative timestamp — body-small, muted, uppercase (e.g., `2 HOURS AGO`, `1 DAY AGO`)
@@ -218,6 +224,7 @@ Displayed once the first message has been sent. The empty state is replaced by a
 - Auto-scrolls to the latest message after each send or AI response chunk.
 
 **User message bubble:**
+
 - Right-aligned
 - White background, dark text
 - Rounded rect (~16px radius, flat on bottom-right corner)
@@ -225,6 +232,7 @@ Displayed once the first message has been sent. The empty state is replaced by a
 - Timestamp below bubble, body-small, muted, right-aligned (e.g. `9:32 AM`)
 
 **AI message bubble:**
+
 - Left-aligned
 - Accent color background (gold/yellow), dark text
 - Rounded rect (~16px radius, flat on bottom-left corner)
@@ -245,6 +253,7 @@ Pinned to the bottom of the screen, above the home indicator (safe area). Does n
 - **Right icon:** Microphone icon, muted color. Non-functional in MVP (visual only). When the input is non-empty, replaced by a send button (arrow icon, accent color).
 
 Sending a message:
+
 1. Appends the user bubble immediately.
 2. Triggers the AI API call (streaming).
 3. On first send of a new conversation: fires a background request to generate and set the conversation title.

@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,10 +19,14 @@ import { colors } from '@/constants/colors';
 import { insertMessage, updateConversationTitle } from '@/lib/db/conversations';
 import { generateConversationTitle, streamChatResponse } from '@/lib/ai/chat';
 import { generateCardsForExchange } from '@/lib/ai/card-generation';
+import { generateFollowUpSuggestions } from '@/lib/ai/suggestions';
 import { getCardFrontsForConversation, insertCards } from '@/lib/db/cards';
 import { useConversation, useMessages } from '@/hooks/useConversations';
 import { useCardCount } from '@/hooks/useCards';
 import { DEV_USER_ID } from '@/constants/dev';
+import { KeepExploring } from '@/components/domain/KeepExploring';
+import { serifBodyMarkdownStyles } from '@/constants/typography';
+import { useSuggestionsStore } from '@/stores/suggestionsStore';
 import type { Message } from '@/lib/types';
 
 const TOPIC_CHIPS: { label: string; prompt: string }[] = [
@@ -82,6 +87,9 @@ export default function ConversationScreen() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [optimisticUserMsg, setOptimisticUserMsg] = useState<Message | null>(null);
+  const { suggestionsByConversation, setSuggestions: storeSuggestions, clearSuggestions } = useSuggestionsStore();
+  const suggestions = suggestionsByConversation[id] ?? [];
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
@@ -122,6 +130,8 @@ export default function ConversationScreen() {
 
     setInputText('');
     setSendError(null);
+    clearSuggestions(id);
+    setSuggestionsLoading(false);
 
     // Build history before async operations so streaming starts immediately
     const history = [
@@ -187,6 +197,11 @@ export default function ConversationScreen() {
         setOptimisticUserMsg(null);
         setStreamingText('');
         setIsStreaming(false);
+        setSuggestionsLoading(true);
+        generateFollowUpSuggestions(text, fullText)
+          .then((results) => storeSuggestions(id, results))
+          .catch(() => {})
+          .finally(() => setSuggestionsLoading(false));
       },
       (error) => {
         console.error('Stream error:', error);
@@ -237,37 +252,38 @@ export default function ConversationScreen() {
                   msg.role === 'user' ? styles.messageRowUser : styles.messageRowAssistant,
                 ]}
               >
-                <View
-                  style={[
-                    styles.bubble,
-                    msg.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant,
-                  ]}
-                >
-                  {msg.id === 'streaming' && streamingText === '' ? (
-                    <TypingIndicator />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.bubbleText,
-                        msg.role === 'user' ? styles.bubbleTextUser : styles.bubbleTextAssistant,
-                      ]}
-                    >
-                      {msg.content}
-                    </Text>
-                  )}
-                </View>
-                {msg.created_at ? (
-                  <Text
-                    style={[
-                      styles.timestamp,
-                      msg.role === 'user' ? styles.timestampUser : styles.timestampAssistant,
-                    ]}
-                  >
+                {msg.role === 'user' ? (
+                  <View style={[styles.bubble, styles.bubbleUser]}>
+                    <Text style={[styles.bubbleText, styles.bubbleTextUser]}>{msg.content}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.assistantProse}>
+                    {msg.id === 'streaming' && streamingText === '' ? (
+                      <TypingIndicator />
+                    ) : (
+                      <Markdown style={serifBodyMarkdownStyles}>{msg.content}</Markdown>
+                    )}
+                  </View>
+                )}
+                {msg.created_at && msg.role === 'user' ? (
+                  <Text style={[styles.timestamp, styles.timestampUser]}>
                     {formatTime(msg.created_at)}
                   </Text>
                 ) : null}
               </View>
             ))}
+            {!isStreaming && (suggestions.length > 0 || suggestionsLoading) && (
+              <View style={styles.keepExploringContainer}>
+                <KeepExploring
+                  suggestions={suggestions}
+                  isLoading={suggestionsLoading}
+                  onSelectSuggestion={(suggestionText) => {
+                    setInputText(suggestionText);
+                    inputRef.current?.focus();
+                  }}
+                />
+              </View>
+            )}
           </ScrollView>
         ) : (
           /* Empty state */
@@ -359,6 +375,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   navButton: {
     width: 32,
@@ -367,7 +385,7 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     flex: 1,
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'Fraunces',
     fontSize: 17,
     color: colors.textPrimary,
     textAlign: 'center',
@@ -390,23 +408,30 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
   },
-  messageRow: {
-    maxWidth: '80%',
-  },
+  messageRow: {},
   messageRowUser: {
     alignSelf: 'flex-end',
     alignItems: 'flex-end',
+    maxWidth: '80%',
   },
   messageRowAssistant: {
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
     alignItems: 'flex-start',
+  },
+  assistantProse: {
+    width: '100%',
+    paddingVertical: 4,
+  },
+  keepExploringContainer: {
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   bubble: {
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   bubbleUser: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surfaceInput,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     borderBottomLeftRadius: 16,
@@ -425,7 +450,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   bubbleTextUser: {
-    color: colors.background,
+    color: colors.textPrimary,
   },
   bubbleTextAssistant: {
     color: colors.background,

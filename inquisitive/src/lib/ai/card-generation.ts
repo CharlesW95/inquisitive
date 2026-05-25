@@ -23,9 +23,14 @@ export async function generateCardsForExchange(
     `- Ask about causes, mechanisms, significance, or deeper "why/how" — not surface facts like dates or names\n` +
     `- Frame it so answering requires genuine understanding, not recall of a single word\n\n` +
     `Guidelines for the back (the answer):\n` +
-    `- Be concise and direct — no padding or restatement of the question\n` +
-    `- Use bullet points when listing multiple contributing factors or steps\n` +
-    `- Weave in specific names, dates, or facts only where they add concrete meaning\n\n` +
+    `- Maximum 3 sentences OR 4 bullet points — never both in the same card\n` +
+    `- No padding, no restating the question, no transitional phrases\n` +
+    `- Use bullet points only when listing 3+ distinct items; otherwise use prose\n` +
+    `- Bold only the single most critical term or date if it aids recall\n` +
+    `- Never use headings (no # syntax)\n` +
+    `- No em dashes (—); use plain punctuation like commas, periods, or colons instead\n` +
+    `- Write in plain, simple English — no flowery or academic language\n` +
+    `- If it can't be said briefly, pick the most important part and stop there\n\n` +
     `Set modality to "basic" for most cards. Use "quiz" only when the concept lends itself to a specific right/wrong answer. If nothing in this exchange merits a standalone card, return an empty array.\n` +
     existingSection +
     `\nExchange:\nUser: ${userMessage}\n\nAssistant: ${aiResponse}\n\n` +

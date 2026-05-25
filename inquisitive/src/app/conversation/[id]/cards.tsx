@@ -15,7 +15,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
+import Markdown from 'react-native-markdown-display';
 import { useConversationCards, useDeleteCard } from '@/hooks/useCards';
+import { cardAnswerMarkdownStyles } from '@/constants/typography';
 import type { Card } from '@/lib/types';
 
 function DeleteModal({
@@ -128,7 +130,7 @@ export default function CardsScreen() {
                 />
               </View>
               <View style={styles.cardRule} />
-              <Text style={styles.cardBack}>{card.answer}</Text>
+              <Markdown style={cardAnswerMarkdownStyles}>{card.answer}</Markdown>
             </View>
           ))}
         </ScrollView>
@@ -203,6 +205,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   navButton: {
     width: 32,
@@ -211,7 +215,7 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     flex: 1,
-    fontFamily: 'Fraunces-Bold',
+    fontFamily: 'Fraunces',
     fontSize: 17,
     color: colors.textPrimary,
     textAlign: 'center',
@@ -256,8 +260,10 @@ const styles = StyleSheet.create({
   },
   cardItem: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 20,
   },
   cardTop: {
     flexDirection: 'row',
@@ -266,9 +272,10 @@ const styles = StyleSheet.create({
   },
   cardFront: {
     flex: 1,
-    fontFamily: 'Fraunces-Bold',
+    fontFamily: 'Fraunces',
     fontSize: 17,
     color: colors.textPrimary,
+    lineHeight: 24,
     paddingRight: 4,
   },
   menuDots: {
@@ -306,12 +313,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.border,
     marginVertical: 12,
-  },
-  cardBack: {
-    fontFamily: 'Fraunces',
-    fontSize: 15,
-    color: colors.textSecondary,
-    lineHeight: 22,
   },
   bottomBar: {
     paddingHorizontal: 16,

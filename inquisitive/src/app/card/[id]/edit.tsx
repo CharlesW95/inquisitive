@@ -3,16 +3,19 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
+import { cardAnswerMarkdownStyles } from '@/constants/typography';
 import { useConversationCards, useDeleteCard, useUpdateCard } from '@/hooks/useCards';
 
 const FRONT_MAX = 200;
@@ -65,6 +68,7 @@ export default function EditCardScreen() {
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
   const [showDelete, setShowDelete] = useState(false);
+  const [answerView, setAnswerView] = useState<'edit' | 'preview'>('edit');
 
   useEffect(() => {
     if (card) {
@@ -137,20 +141,39 @@ export default function EditCardScreen() {
 
           {/* Answer section */}
           <View style={styles.section}>
-            <Text style={styles.labelMuted}>ANSWER</Text>
-            <TextInput
-              style={styles.inputBack}
-              value={back}
-              onChangeText={(t) => setBack(t.slice(0, BACK_MAX))}
-              placeholder="What's the answer or explanation?"
-              placeholderTextColor={colors.textMuted}
-              multiline
-              maxFontSizeMultiplier={1}
-            />
-            {back.length >= BACK_COUNTER_THRESHOLD && (
-              <Text style={[styles.counter, back.length >= BACK_MAX && styles.counterLimit]}>
-                {back.length} / {BACK_MAX}
-              </Text>
+            <View style={styles.answerHeader}>
+              <Text style={styles.labelMuted}>ANSWER</Text>
+              <View style={styles.viewToggle}>
+                {(['edit', 'preview'] as const).map((mode) => (
+                  <TouchableOpacity key={mode} onPress={() => setAnswerView(mode)} hitSlop={8}>
+                    <Text style={answerView === mode ? styles.toggleActive : styles.toggleInactive}>
+                      {mode === 'edit' ? 'Edit' : 'Preview'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            {answerView === 'edit' ? (
+              <>
+                <TextInput
+                  style={styles.inputBack}
+                  value={back}
+                  onChangeText={(t) => setBack(t.slice(0, BACK_MAX))}
+                  placeholder="What's the answer or explanation?"
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                  maxFontSizeMultiplier={1}
+                />
+                {back.length >= BACK_COUNTER_THRESHOLD && (
+                  <Text style={[styles.counter, back.length >= BACK_MAX && styles.counterLimit]}>
+                    {back.length} / {BACK_MAX}
+                  </Text>
+                )}
+              </>
+            ) : (
+              <ScrollView style={styles.answerPreview} scrollEnabled={false}>
+                <Markdown style={cardAnswerMarkdownStyles}>{back || ' '}</Markdown>
+              </ScrollView>
             )}
           </View>
 
@@ -185,6 +208,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   navButton: {
     width: 56,
@@ -193,7 +218,7 @@ const styles = StyleSheet.create({
   },
   navTitle: {
     flex: 1,
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'Fraunces',
     fontSize: 17,
     color: colors.textPrimary,
     textAlign: 'center',
@@ -228,7 +253,30 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
+  },
+  answerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 10,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  toggleActive: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: colors.accent,
+  },
+  toggleInactive: {
+    fontFamily: 'Inter',
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  answerPreview: {
+    minHeight: 120,
+    paddingVertical: 4,
   },
   inputFront: {
     fontFamily: 'Fraunces',

@@ -28,7 +28,7 @@ import { generateFollowUpSuggestions } from '@/lib/ai/suggestions';
 import { getCardFrontsForConversation, insertCards } from '@/lib/db/cards';
 import { useConversation, useDeleteConversation, useMessages } from '@/hooks/useConversations';
 import { useCardCount } from '@/hooks/useCards';
-import { DEV_USER_ID } from '@/constants/dev';
+import { useAuthStore } from '@/stores/authStore';
 import { useToastStore } from '@/stores/toastStore';
 import { KeepExploring } from '@/components/domain/KeepExploring';
 import { serifBodyMarkdownStyles } from '@/constants/typography';
@@ -135,6 +135,7 @@ export default function ConversationScreen() {
   const menuBtnRef = useRef<React.ElementRef<typeof TouchableOpacity>>(null);
   const { width: screenWidth } = useWindowDimensions();
   const showToast = useToastStore((s) => s.showToast);
+  const userId = useAuthStore((s) => s.userId);
   const deleteConversation = useDeleteConversation();
   const { suggestionsByConversation, setSuggestions: storeSuggestions, clearSuggestions } = useSuggestionsStore();
   const suggestions = suggestionsByConversation[id] ?? [];
@@ -242,7 +243,7 @@ export default function ConversationScreen() {
               existingFronts,
             );
             if (drafts.length > 0) {
-              await insertCards(DEV_USER_ID, id, assistantMsg.id, drafts);
+              await insertCards(userId!, id, assistantMsg.id, drafts);
               queryClient.invalidateQueries({ queryKey: ['cardCount', id] });
               queryClient.invalidateQueries({ queryKey: ['conversations'] });
             }
@@ -282,7 +283,7 @@ export default function ConversationScreen() {
     setShowDeleteModal(false);
     try {
       await deleteConversation.mutateAsync({ id, deleteCards });
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)/' as any);
     } catch {
       showToast('Failed to delete conversation', 'error');
     }

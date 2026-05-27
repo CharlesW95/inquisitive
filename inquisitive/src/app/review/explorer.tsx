@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
 import { cardQuestionMarkdownStyles } from '@/constants/typography';
-import { DEV_USER_ID } from '@/constants/dev';
 import { useAllCardsPaginated, useDueCards } from '@/hooks/useDueCards';
 import { useDeleteCard } from '@/hooks/useCards';
 import type { DueCard } from '@/lib/db/cards';
@@ -98,8 +97,8 @@ export default function CardExplorerScreen() {
   const [popoverCard, setPopoverCard] = useState<DueCard | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DueCard | null>(null);
 
-  const { data: dueCards = [] } = useDueCards(DEV_USER_ID);
-  const { data: allPages, fetchNextPage, hasNextPage, isFetchingNextPage } = useAllCardsPaginated(DEV_USER_ID);
+  const { data: dueCards = [] } = useDueCards();
+  const { data: allPages, fetchNextPage, hasNextPage, isFetchingNextPage } = useAllCardsPaginated();
   const deleteCard = useDeleteCard();
 
   const allCards = useMemo(() => allPages?.pages.flat() ?? [], [allPages]);

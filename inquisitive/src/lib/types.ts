@@ -2,6 +2,7 @@ export type CardModality = 'basic' | 'quiz' | 'active' | 'teach_me';
 
 export interface Profile {
   id: string;
+  first_name: string | null;
   timezone: string;
   notifications_enabled: boolean;
   created_at: string;

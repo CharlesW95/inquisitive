@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DEV_USER_ID } from '@/constants/dev';
+import { useAuthStore } from '@/stores/authStore';
 import {
   createConversation,
   deleteConversation,
@@ -13,37 +13,44 @@ import {
 } from '@/lib/db/conversations';
 
 export function useConversations() {
+  const userId = useAuthStore((s) => s.userId);
   return useQuery({
-    queryKey: ['conversations', DEV_USER_ID],
-    queryFn: () => getConversations(DEV_USER_ID),
+    queryKey: ['conversations', userId],
+    queryFn: () => getConversations(userId!),
+    enabled: !!userId,
   });
 }
 
 export function useConversationSearch(query: string) {
+  const userId = useAuthStore((s) => s.userId);
   return useQuery({
-    queryKey: ['conversations', 'search', DEV_USER_ID, query],
-    queryFn: () => searchConversations(DEV_USER_ID, query),
-    enabled: query.trim().length > 0,
+    queryKey: ['conversations', 'search', userId, query],
+    queryFn: () => searchConversations(userId!, query),
+    enabled: !!userId && query.trim().length > 0,
   });
 }
 
 export function useAllConversations() {
+  const userId = useAuthStore((s) => s.userId);
   return useInfiniteQuery({
-    queryKey: ['conversations', 'all', DEV_USER_ID],
-    queryFn: ({ pageParam }) => getConversationsPaged(DEV_USER_ID, 10, pageParam),
+    queryKey: ['conversations', 'all', userId],
+    queryFn: ({ pageParam }) => getConversationsPaged(userId!, 10, pageParam),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < 10 ? undefined : allPages.length * 10,
+    enabled: !!userId,
   });
 }
 
 export function useRecentConversations() {
+  const userId = useAuthStore((s) => s.userId);
   return useQuery({
-    queryKey: ['conversations', DEV_USER_ID],
+    queryKey: ['conversations', userId],
     queryFn: async () => {
-      const all = await getConversations(DEV_USER_ID);
+      const all = await getConversations(userId!);
       return all.slice(0, 5);
     },
+    enabled: !!userId,
   });
 }
 
@@ -65,8 +72,9 @@ export function useMessages(conversationId: string) {
 
 export function useCreateConversation() {
   const queryClient = useQueryClient();
+  const userId = useAuthStore((s) => s.userId);
   return useMutation({
-    mutationFn: () => createConversation(DEV_USER_ID),
+    mutationFn: () => createConversation(userId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },

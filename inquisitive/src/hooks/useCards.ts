@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@/stores/authStore';
 import {
   createCard,
   deleteCard,
@@ -25,18 +26,17 @@ export function useConversationCards(conversationId: string) {
 
 export function useCreateCard() {
   const queryClient = useQueryClient();
+  const userId = useAuthStore((s) => s.userId);
   return useMutation({
     mutationFn: ({
-      userId,
       conversationId,
       front,
       back,
     }: {
-      userId: string;
       conversationId: string;
       front: string;
       back: string;
-    }) => createCard(userId, conversationId, front, back),
+    }) => createCard(userId!, conversationId, front, back),
     onSuccess: (_, { conversationId }) => {
       queryClient.invalidateQueries({ queryKey: ['cards', conversationId] });
       queryClient.invalidateQueries({ queryKey: ['cardCount', conversationId] });

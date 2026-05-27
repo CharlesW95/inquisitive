@@ -17,7 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
-import { DEV_USER_ID } from '@/constants/dev';
+import { useAuthStore } from '@/stores/authStore';
 import { createConversation, insertMessage, updateConversationTitle } from '@/lib/db/conversations';
 import { generateConversationTitle, streamChatResponse } from '@/lib/ai/chat';
 import { serifBodyMarkdownStyles } from '@/constants/typography';
@@ -65,6 +65,7 @@ export default function NewConversationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const userId = useAuthStore((s) => s.userId);
 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
@@ -94,7 +95,7 @@ export default function NewConversationScreen() {
     setInputText('');
     setSentUserText(text);
 
-    const convo = await createConversation(DEV_USER_ID);
+    const convo = await createConversation(userId!);
     const id = convo.id;
     setConversationId(id);
 
@@ -119,7 +120,7 @@ export default function NewConversationScreen() {
         queryClient.setQueryData(['messages', id], [userMsg, assistantMsg]);
         queryClient.setQueryData(['conversation', id], {
           id,
-          user_id: DEV_USER_ID,
+          user_id: userId!,
           title: generatedTitle,
           created_at: convo.created_at,
           updated_at: new Date().toISOString(),

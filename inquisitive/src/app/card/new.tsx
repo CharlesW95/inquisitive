@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 import { colors } from '@/constants/colors';
 import { useCreateCard } from '@/hooks/useCards';
-import { DEV_USER_ID } from '@/constants/dev';
 import { useToastStore } from '@/stores/toastStore';
 
 const FRONT_MAX = 200;
@@ -36,7 +35,7 @@ export default function NewCardScreen() {
   async function handleSave() {
     if (!canSave) return;
     try {
-      await createCard.mutateAsync({ userId: DEV_USER_ID, conversationId, front, back });
+      await createCard.mutateAsync({ conversationId, front, back });
       router.back();
     } catch {
       showToast('Failed to save card', 'error');

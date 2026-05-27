@@ -15,7 +15,6 @@ import Markdown from 'react-native-markdown-display';
 import { Rating } from 'ts-fsrs';
 import { colors } from '@/constants/colors';
 import { sessionAnswerMarkdownStyles, sessionQuestionMarkdownStyles } from '@/constants/typography';
-import { DEV_USER_ID } from '@/constants/dev';
 import { useDueCards } from '@/hooks/useDueCards';
 import { useSubmitRating } from '@/hooks/useCardReview';
 import { useDeleteCard } from '@/hooks/useCards';
@@ -105,7 +104,7 @@ export default function ReviewSessionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { data: dueCards, isLoading } = useDueCards(DEV_USER_ID);
+  const { data: dueCards, isLoading } = useDueCards();
   const submitRating = useSubmitRating();
   const deleteCard = useDeleteCard();
   const showToast = useToastStore((s) => s.showToast);

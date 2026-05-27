@@ -2,7 +2,6 @@ import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "@/constants/colors";
-import { DEV_USER_ID } from "@/constants/dev";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ChatBar } from "@/components/ui/ChatBar";
 import { ReviewCard } from "@/components/domain/ReviewCard";
@@ -40,7 +39,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data: recentConversations, isLoading: conversationsLoading } = useRecentConversations();
-  const { data: dueCards, isLoading: dueCardsLoading } = useDueCards(DEV_USER_ID);
+  const { data: dueCards, isLoading: dueCardsLoading } = useDueCards();
   const reviewCards = (dueCards ?? []).slice(0, 5);
 
   return (

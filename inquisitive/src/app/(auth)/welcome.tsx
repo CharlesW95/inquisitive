@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '@/constants/colors';
 import { upsertProfile } from '@/lib/db/profiles';
 import { useAuthStore } from '@/stores/authStore';
+import { useProfileStore } from '@/stores/profileStore';
 import { useToastStore } from '@/stores/toastStore';
 
 export default function WelcomeScreen() {
@@ -30,6 +31,7 @@ export default function WelcomeScreen() {
     setLoading(true);
     try {
       await upsertProfile(userId, { first_name: trimmed });
+      useProfileStore.getState().setFirstName(userId, trimmed);
       router.replace('/(tabs)/' as any);
     } catch {
       showToast('Failed to save your name. Please try again.', 'error');

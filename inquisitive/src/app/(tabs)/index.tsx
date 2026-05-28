@@ -8,6 +8,7 @@ import { ReviewCard } from "@/components/domain/ReviewCard";
 import { ConversationRow } from "@/components/domain/ConversationRow";
 import { useRecentConversations } from "@/hooks/useConversations";
 import { useDueCards } from "@/hooks/useDueCards";
+import { useFirstName } from "@/hooks/useFirstName";
 
 function formatDueLabel(due: string): string {
   const now = new Date();
@@ -41,6 +42,8 @@ export default function HomeScreen() {
   const { data: recentConversations, isLoading: conversationsLoading } = useRecentConversations();
   const { data: dueCards, isLoading: dueCardsLoading } = useDueCards();
   const reviewCards = (dueCards ?? []).slice(0, 5);
+  const firstName = useFirstName();
+  const greeting = firstName ? `${getGreeting()}, ${firstName}.` : `${getGreeting()}.`;
 
   return (
     <View
@@ -65,7 +68,7 @@ export default function HomeScreen() {
             className="font-serif-bold text-text-primary"
             style={{ fontSize: 24 }}
           >
-            {getGreeting()}, Charles.
+            {greeting}
           </Text>
           <Text
             className="font-sans text-text-secondary mt-2"
@@ -76,41 +79,52 @@ export default function HomeScreen() {
         </View>
 
         {/* Section 2 — Review */}
-        {(dueCardsLoading || reviewCards.length > 0) && (
-          <View style={{ marginBottom: 40 }}>
-            <View className="px-5 mb-4">
-              <SectionHeader
-                title="Review"
-                subtitle="Engage with knowledge you've explored"
-                ctaLabel="SEE ALL ›"
-                onCtaPress={() => router.push("/review/explorer" as any)}
-              />
-            </View>
+        <View style={{ marginBottom: 40 }}>
+          <View className="px-5 mb-4">
+            <SectionHeader
+              title="Review"
+              subtitle="Engage with knowledge you've explored"
+              ctaLabel="SEE ALL ›"
+              onCtaPress={() => router.push("/review/explorer" as any)}
+            />
+          </View>
+          {dueCardsLoading ? (
+            <ActivityIndicator color={colors.textMuted} style={{ marginLeft: 20, marginTop: 12 }} />
+          ) : reviewCards.length > 0 ? (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ paddingLeft: 20, paddingRight: 20, gap: 12 }}
             >
-              {dueCardsLoading ? (
-                <ActivityIndicator color={colors.textMuted} style={{ marginLeft: 8, marginTop: 60 }} />
-              ) : (
-                reviewCards.map((card) => (
-                  <ReviewCard
-                    key={card.id}
-                    card={{
-                      id: card.id,
-                      modality: card.modality,
-                      topicTag: card.conversationTitle?.toUpperCase() ?? 'CARD',
-                      prompt: card.prompt,
-                      dueLabel: formatDueLabel(card.schedule.due),
-                    }}
-                    onPress={() => router.push({ pathname: '/review/session' as any, params: { startCardId: card.id } })}
-                  />
-                ))
-              )}
+              {reviewCards.map((card) => (
+                <ReviewCard
+                  key={card.id}
+                  card={{
+                    id: card.id,
+                    modality: card.modality,
+                    topicTag: card.conversationTitle?.toUpperCase() ?? 'CARD',
+                    prompt: card.prompt,
+                    dueLabel: formatDueLabel(card.schedule.due),
+                  }}
+                  onPress={() => router.push({ pathname: '/review/session' as any, params: { startCardId: card.id } })}
+                />
+              ))}
             </ScrollView>
-          </View>
-        )}
+          ) : (
+            <View style={{ paddingHorizontal: 20 }}>
+              <ReviewCard
+                card={{
+                  id: 'empty-state',
+                  modality: 'message',
+                  topicTag: 'GET STARTED',
+                  prompt: 'Cards will appear here as you have conversations.',
+                  dueLabel: 'NO CARDS YET',
+                }}
+                onPress={() => router.push('/conversation/new')}
+              />
+            </View>
+          )}
+        </View>
 
         {/* Section 3 — Continue */}
         <View className="px-5" style={{ marginBottom: 40 }}>

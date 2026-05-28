@@ -112,24 +112,41 @@ Deno.serve(async (req: Request) => {
         : '';
 
     const prompt =
-      `You are a learning assistant creating flashcards from a conversation exchange.\n\n` +
-      `Given this exchange from a conversation titled '${body.title}', generate 0–2 flashcards worth adding to a spaced repetition deck.\n\n` +
-      `Guidelines for the front (the question):\n` +
-      `- Ask about causes, mechanisms, significance, or deeper "why/how" — not surface facts like dates or names\n` +
-      `- Frame it so answering requires genuine understanding, not recall of a single word\n\n` +
-      `Guidelines for the back (the answer):\n` +
-      `- Maximum 3 sentences OR 4 bullet points — never both in the same card\n` +
-      `- No padding, no restating the question, no transitional phrases\n` +
-      `- Use bullet points only when listing 3+ distinct items; otherwise use prose\n` +
-      `- Bold only the single most critical term or date if it aids recall\n` +
-      `- Never use headings (no # syntax)\n` +
-      `- No em dashes (—); use plain punctuation like commas, periods, or colons instead\n` +
-      `- Write in plain, simple English — no flowery or academic language\n` +
-      `- If it can't be said briefly, pick the most important part and stop there\n\n` +
-      `Set modality to "basic" for most cards. Use "quiz" only when the concept lends itself to a specific right/wrong answer. If nothing in this exchange merits a standalone card, return an empty array.\n` +
+      `You generate flashcards from a conversation exchange. Return 0–2 cards worth keeping in a spaced repetition deck.\n\n` +
+      `The "back" field is rendered as Markdown. Match the format to the question type.\n\n` +
+      `Example (single-fact recall):\n` +
+      `Front: "When did the Berlin Wall fall?"\n` +
+      `Back: "**November 9, 1989**"\n\n` +
+      `Example (who/what recall):\n` +
+      `Front: "Who proved DNA carries hereditary information?"\n` +
+      `Back: "Avery, MacLeod, and McCarty (1944)"\n\n` +
+      `Example (short conceptual):\n` +
+      `Front: "Why does adding salt raise water's boiling point?"\n` +
+      `Back: "Dissolved salt makes it harder for water molecules to escape into vapor."\n\n` +
+      `Example (conceptual with bullets):\n` +
+      `Front: "Why do leaves change color in autumn?"\n` +
+      `Back: "Trees stop making chlorophyll as days shorten, revealing pigments that were hidden underneath.\n\n` +
+      `- Chlorophyll (green) dominates in summer\n` +
+      `- As it breaks down, **carotenoids** (yellow/orange) become visible\n` +
+      `- Cold triggers production of new **anthocyanins** (red/purple)"\n\n` +
+      `Example (list-style):\n` +
+      `Front: "What are the main causes of WWI?"\n` +
+      `Back: "Often summarized as **MAIN**: Militarism, Alliances, Imperialism, Nationalism.\n\n` +
+      `- Militarism: arms races in Germany and Britain\n` +
+      `- Alliances: small conflicts pulled in great powers\n` +
+      `- Imperialism: colonial rivalries\n` +
+      `- Nationalism: Balkan nationalism triggered the assassination of Franz Ferdinand"\n\n` +
+      `Rules:\n` +
+      `- Plain, simple English. No academic phrasing, no transitional fluff.\n` +
+      `- For pure recall (when/who/single fact), give just the fact. For conceptual answers, lead with a punchy one-sentence answer; add bullets only if they genuinely add value.\n` +
+      `- **Bold** the single most critical term or number, sparingly.\n` +
+      `- No headings (#). No em dashes (—); use commas, periods, or colons.\n` +
+      `- The front must be specific and answerable from the card alone.\n\n` +
+      `Conversation title: '${body.title}'\n` +
       existingSection +
       `\nExchange:\nUser: ${body.userMessage}\n\nAssistant: ${body.aiResponse}\n\n` +
-      `Return JSON only: an array of { front, back, modality } objects, or [].`;
+      `Set modality to "basic" for most cards, "quiz" only when there's a definite right/wrong answer. If nothing here merits a card, return [].\n` +
+      `Return JSON only: an array of { front, back, modality }, or [].`;
 
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',

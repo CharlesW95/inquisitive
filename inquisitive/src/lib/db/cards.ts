@@ -74,7 +74,7 @@ export async function getConversationCards(conversationId: string): Promise<Card
     .select('*')
     .eq('conversation_id', conversationId)
     .is('deleted_at', null)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as Card[];
 }

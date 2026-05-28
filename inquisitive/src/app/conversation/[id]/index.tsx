@@ -29,6 +29,7 @@ import { getCardFrontsForConversation, insertCards } from '@/lib/db/cards';
 import { useConversation, useDeleteConversation, useMessages } from '@/hooks/useConversations';
 import { useCardCount } from '@/hooks/useCards';
 import { useAuthStore } from '@/stores/authStore';
+import { useAutoGenCardsStore } from '@/stores/autoGenCardsStore';
 import { useToastStore } from '@/stores/toastStore';
 import { KeepExploring } from '@/components/domain/KeepExploring';
 import { serifBodyMarkdownStyles } from '@/constants/typography';
@@ -136,6 +137,8 @@ export default function ConversationScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const showToast = useToastStore((s) => s.showToast);
   const userId = useAuthStore((s) => s.userId);
+  const autoGenCards = useAutoGenCardsStore((s) => s.autoGenByConversation[id] !== false);
+  const setAutoGenCards = useAutoGenCardsStore((s) => s.setAutoGen);
   const deleteConversation = useDeleteConversation();
   const { suggestionsByConversation, setSuggestions: storeSuggestions, clearSuggestions } = useSuggestionsStore();
   const suggestions = suggestionsByConversation[id] ?? [];
@@ -157,8 +160,8 @@ export default function ConversationScreen() {
     ? messages.some((m) => m.role === 'user' && m.content === optimisticUserMsg.content)
       ? messages // DB has it — drop optimistic copy
       : [...messages, optimisticUserMsg].sort(
-          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-        )
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      )
     : messages;
 
   const displayMessages: DisplayMessage[] = [
@@ -219,7 +222,7 @@ export default function ConversationScreen() {
           queryClient.invalidateQueries({ queryKey: ['conversation', id] });
           queryClient.invalidateQueries({ queryKey: ['conversations'] });
         })
-        .catch(() => {});
+        .catch(() => { });
     }
 
     setIsStreaming(true);
@@ -234,6 +237,7 @@ export default function ConversationScreen() {
       (fullText) => {
         insertMessage(id, 'assistant', fullText).then(async (assistantMsg) => {
           queryClient.invalidateQueries({ queryKey: ['messages', id] });
+          if (!autoGenCards) return;
           try {
             const existingFronts = await getCardFrontsForConversation(id);
             const drafts = await generateCardsForExchange(
@@ -258,7 +262,7 @@ export default function ConversationScreen() {
           setSuggestionsLoading(true);
           generateFollowUpSuggestions(text, fullText)
             .then((results) => storeSuggestions(id, results))
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => setSuggestionsLoading(false));
         }
       },
@@ -303,7 +307,7 @@ export default function ConversationScreen() {
 
         <View style={styles.navRightGroup}>
           <TouchableOpacity onPress={() => router.push({ pathname: '/conversation/[id]/cards', params: { id } })} style={styles.navCardsBtn} hitSlop={8}>
-            <SymbolView name="square.stack" size={16} tintColor={colors.textMuted} />
+            <SymbolView name="square.stack.3d.up.fill" size={16} tintColor={colors.textMuted} />
             <Text style={styles.cardCount}>{cardCount}</Text>
           </TouchableOpacity>
           <TouchableOpacity ref={menuBtnRef} onPress={handleMenuPress} hitSlop={8}>
@@ -452,6 +456,17 @@ export default function ConversationScreen() {
         <View style={[styles.popover, { top: menuPos.top, right: menuPos.right }]}>
           <TouchableOpacity
             style={styles.popoverItem}
+            onPress={() => setAutoGenCards(id, !autoGenCards)}
+          >
+            <SymbolView name="sparkles" size={15} tintColor={colors.textPrimary} />
+            <Text style={[styles.popoverText, styles.popoverTextFlex]}>Auto-create cards</Text>
+            {autoGenCards && (
+              <SymbolView name="checkmark" size={14} tintColor={colors.accent} />
+            )}
+          </TouchableOpacity>
+          <View style={styles.popoverDivider} />
+          <TouchableOpacity
+            style={styles.popoverItem}
             onPress={() => { setMenuOpen(false); setShowDeleteModal(true); }}
           >
             <SymbolView name="trash" size={15} tintColor="#E05252" />
@@ -519,7 +534,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    minWidth: 130,
+    minWidth: 220,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.4,
     shadowRadius: 10,
@@ -533,10 +549,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 13,
   },
+  popoverText: {
+    fontFamily: 'Inter',
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  popoverTextFlex: {
+    flex: 1,
+  },
   popoverTextDestructive: {
     fontFamily: 'Inter',
     fontSize: 15,
     color: '#E05252',
+  },
+  popoverDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
   },
   // Delete conversation modal
   overlay: {

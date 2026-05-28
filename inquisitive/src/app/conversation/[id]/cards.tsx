@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -71,6 +71,12 @@ export default function CardsScreen() {
   const deleteCard = useDeleteCard();
   const showToast = useToastStore((s) => s.showToast);
 
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
+  const displayedCards = useMemo(
+    () => (sortDir === 'desc' ? cards : [...cards].reverse()),
+    [cards, sortDir],
+  );
+
   const [activeMenu, setActiveMenu] = useState<{
     card: Card;
     top: number;
@@ -105,7 +111,17 @@ export default function CardsScreen() {
           <SymbolView name="chevron.left" size={20} tintColor={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.navTitle}>{cards.length} Cards</Text>
-        <View style={styles.navRight} />
+        {cards.length > 1 ? (
+          <TouchableOpacity
+            onPress={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
+            style={styles.navButton}
+            hitSlop={8}
+          >
+            <SymbolView name="arrow.up.arrow.down" size={18} tintColor={colors.textMuted} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.navRight} />
+        )}
       </View>
 
       {/* Body */}
@@ -126,7 +142,7 @@ export default function CardsScreen() {
           contentContainerStyle={styles.cardList}
           showsVerticalScrollIndicator={false}
         >
-          {cards.map((card) => (
+          {displayedCards.map((card) => (
             <View key={card.id} style={styles.cardItem}>
               <View style={styles.cardTop}>
                 <Text style={styles.cardFront}>{card.prompt}</Text>

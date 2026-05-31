@@ -121,6 +121,14 @@ function DeleteConversationModal({
 
 type DisplayMessage = Message | { id: 'streaming'; role: 'assistant'; content: string; created_at: '' };
 
+// When a new turn begins we scroll the user's question this far below the top of
+// the viewport, leaving the rest of the screen as reserved space for the answer.
+const PIN_OFFSET = 12;
+
+// Show the jump-to-bottom button once the bottom of the content is more than this
+// far below the viewport.
+const SCROLL_BOTTOM_THRESHOLD = 80;
+
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -128,6 +136,10 @@ export default function ConversationScreen() {
   const queryClient = useQueryClient();
 
   const [inputText, setInputText] = useState('');
+  // Driven by the TextInput's content size so the box grows with wrapped lines — also
+  // when the text is set programmatically (e.g. from a Keep Exploring suggestion), which
+  // doesn't auto-grow a multiline input on its own.
+  const [inputHeight, setInputHeight] = useState(20);
   const [streamingText, setStreamingText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [optimisticUserMsg, setOptimisticUserMsg] = useState<Message | null>(null);
@@ -152,6 +164,22 @@ export default function ConversationScreen() {
 
   const scrollRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
+  // Height of the visible scroll area and of the current (user + streaming answer)
+  // turn. The trailing spacer (viewportH - turnH) keeps the user's question pinned
+  // to the top so the answer streams into pre-allocated space without scroll jumps.
+  const [viewportH, setViewportH] = useState(0);
+  const [turnH, setTurnH] = useState(0);
+  // Set when a new turn starts so the next layout pass pins the question to the top once.
+  const pendingPinRef = useRef(false);
+  // Latest scroll geometry, used to decide whether we're at the bottom.
+  const scrollMetrics = useRef({ offsetY: 0, viewportH: 0 });
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const scrollBtnOpacity = useRef(new Animated.Value(0)).current;
+  const scrollBtnScale = useRef(new Animated.Value(1)).current;
+  // Auto-scroll to the latest message only on first entry, never after the user has
+  // started sending — past that point the scroll position is the user's to control.
+  const didInitialScrollRef = useRef(false);
+  const hasSentRef = useRef(false);
 
   const { data: conversation, isLoading: convLoading } = useConversation(id);
   const { data: messages = [], isLoading: msgsLoading } = useMessages(id);
@@ -169,14 +197,59 @@ export default function ConversationScreen() {
       )
     : messages;
 
-  const displayMessages: DisplayMessage[] = [
-    ...baseMessages,
-    ...(isStreaming
-      ? [{ id: 'streaming' as const, role: 'assistant' as const, content: streamingText, created_at: '' as const }]
-      : []),
-  ];
+  // During streaming the last base message is the current question; render it together
+  // with the streaming answer inside one measured wrapper so we can pin + reserve space.
+  const currentUserMsg = isStreaming && baseMessages.length > 0
+    ? baseMessages[baseMessages.length - 1]
+    : null;
+  const historicalMessages = currentUserMsg ? baseMessages.slice(0, -1) : baseMessages;
+  const streamingMsg: DisplayMessage = {
+    id: 'streaming',
+    role: 'assistant',
+    content: streamingText,
+    created_at: '',
+  };
+  // Reserve a screenful below the current turn so the question pins to the top. As the
+  // answer grows the spacer shrinks by the same amount (content size stays constant → no
+  // scroll). Once the answer outgrows the screen the spacer is 0 and it simply extends
+  // below the fold — we never auto-scroll; the user reads and scrolls at their own pace.
+  const spacerHeight = isStreaming ? Math.max(0, viewportH - turnH) : 0;
+
+  const recomputeScrollButton = (contentH: number) => {
+    const { offsetY, viewportH: vh } = scrollMetrics.current;
+    setShowScrollButton(contentH - (offsetY + vh) > SCROLL_BOTTOM_THRESHOLD);
+  };
 
   const hasMessages = messages.length > 0 || isStreaming;
+
+  const renderRow = (msg: DisplayMessage) => (
+    <View
+      key={msg.id}
+      style={[
+        styles.messageRow,
+        msg.role === 'user' ? styles.messageRowUser : styles.messageRowAssistant,
+      ]}
+    >
+      {msg.role === 'user' ? (
+        <View style={[styles.bubble, styles.bubbleUser]}>
+          <Text style={[styles.bubbleText, styles.bubbleTextUser]}>{msg.content}</Text>
+        </View>
+      ) : (
+        <View style={styles.assistantProse}>
+          {msg.id === 'streaming' && streamingText === '' ? (
+            <TypingIndicator />
+          ) : (
+            <Markdown style={serifBodyMarkdownStyles}>{msg.content}</Markdown>
+          )}
+        </View>
+      )}
+      {msg.created_at && msg.role === 'user' ? (
+        <Text style={[styles.timestamp, styles.timestampUser]}>
+          {formatTime(msg.created_at)}
+        </Text>
+      ) : null}
+    </View>
+  );
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardWillShow', () => setKeyboardVisible(true));
@@ -185,8 +258,19 @@ export default function ConversationScreen() {
   }, []);
 
   useEffect(() => {
-    if (hasMessages) {
-      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    Animated.timing(scrollBtnOpacity, {
+      toValue: showScrollButton ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [showScrollButton]);
+
+  useEffect(() => {
+    // Land at the latest message when first opening a conversation with history. After
+    // the user starts sending, the pin/spacer logic and manual scrolling take over.
+    if (messages.length > 0 && !didInitialScrollRef.current && !hasSentRef.current) {
+      didInitialScrollRef.current = true;
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 50);
     }
   }, [messages.length]);
 
@@ -195,6 +279,7 @@ export default function ConversationScreen() {
     if (!text || isStreaming) return;
 
     setInputText('');
+    setInputHeight(20);
     clearSuggestions(id);
     setSuggestionsLoading(false);
 
@@ -230,14 +315,17 @@ export default function ConversationScreen() {
         .catch(() => { });
     }
 
+    setTurnH(0);
+    pendingPinRef.current = true;
+    hasSentRef.current = true;
     setIsStreaming(true);
     setStreamingText('');
 
     streamChatResponse(
       history,
       (token) => {
+        // No per-token scrolling: text streams into the space reserved by the spacer.
         setStreamingText((prev) => prev + token);
-        scrollRef.current?.scrollToEnd({ animated: false });
       },
       (fullText) => {
         insertMessage(id, 'assistant', fullText).then(async (assistantMsg) => {
@@ -339,6 +427,7 @@ export default function ConversationScreen() {
         keyboardVerticalOffset={0}
       >
         {/* Message area */}
+        <View style={styles.messageArea}>
         {isInitialLoad ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator color={colors.textMuted} size="large" />
@@ -349,36 +438,37 @@ export default function ConversationScreen() {
             style={{ flex: 1 }}
             contentContainerStyle={styles.messageList}
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+            scrollEventThrottle={16}
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              setViewportH(h);
+              scrollMetrics.current.viewportH = h;
+            }}
+            onScroll={(e) => {
+              const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+              scrollMetrics.current = { offsetY: contentOffset.y, viewportH: layoutMeasurement.height };
+              recomputeScrollButton(contentSize.height);
+            }}
+            onContentSizeChange={(_w, h) => recomputeScrollButton(h)}
           >
-            {displayMessages.map((msg) => (
+            {historicalMessages.map(renderRow)}
+            {currentUserMsg && (
               <View
-                key={msg.id}
-                style={[
-                  styles.messageRow,
-                  msg.role === 'user' ? styles.messageRowUser : styles.messageRowAssistant,
-                ]}
+                style={styles.currentTurn}
+                onLayout={(e) => {
+                  const { y, height } = e.nativeEvent.layout;
+                  setTurnH(height);
+                  if (pendingPinRef.current) {
+                    pendingPinRef.current = false;
+                    scrollRef.current?.scrollTo({ y: Math.max(0, y - PIN_OFFSET), animated: true });
+                  }
+                }}
               >
-                {msg.role === 'user' ? (
-                  <View style={[styles.bubble, styles.bubbleUser]}>
-                    <Text style={[styles.bubbleText, styles.bubbleTextUser]}>{msg.content}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.assistantProse}>
-                    {msg.id === 'streaming' && streamingText === '' ? (
-                      <TypingIndicator />
-                    ) : (
-                      <Markdown style={serifBodyMarkdownStyles}>{msg.content}</Markdown>
-                    )}
-                  </View>
-                )}
-                {msg.created_at && msg.role === 'user' ? (
-                  <Text style={[styles.timestamp, styles.timestampUser]}>
-                    {formatTime(msg.created_at)}
-                  </Text>
-                ) : null}
+                {renderRow(currentUserMsg)}
+                {renderRow(streamingMsg)}
               </View>
-            ))}
+            )}
+            {isStreaming && <View style={{ height: spacerHeight }} />}
             {!isStreaming && (suggestions.length > 0 || suggestionsLoading) && (
               <View style={styles.keepExploringContainer}>
                 <KeepExploring
@@ -431,22 +521,68 @@ export default function ConversationScreen() {
             </View>
           </ScrollView>
         )}
+          <Animated.View
+            style={[styles.scrollDownWrap, { opacity: scrollBtnOpacity }]}
+            pointerEvents={showScrollButton ? 'box-none' : 'none'}
+          >
+            <Animated.View style={{ transform: [{ scale: scrollBtnScale }] }}>
+              <Pressable
+                style={styles.scrollDownBtn}
+                onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
+                onPressIn={() =>
+                  Animated.spring(scrollBtnScale, {
+                    toValue: 0.85,
+                    useNativeDriver: true,
+                    bounciness: 0,
+                    speed: 40,
+                  }).start()
+                }
+                onPressOut={() =>
+                  Animated.spring(scrollBtnScale, {
+                    toValue: 1,
+                    useNativeDriver: true,
+                    bounciness: 6,
+                    speed: 30,
+                  }).start()
+                }
+                hitSlop={8}
+              >
+                <SymbolView name="chevron.down" size={18} tintColor={colors.textPrimary} />
+              </Pressable>
+            </Animated.View>
+          </Animated.View>
+        </View>
 
         {/* Input Bar */}
         <View style={[styles.inputContainer, { paddingBottom: keyboardVisible ? 8 : insets.bottom + 8 }]}>
           <View style={styles.inputBar}>
-            <TextInput
-              ref={inputRef}
-              style={styles.input}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="What are you curious about?"
-              placeholderTextColor={colors.textMuted}
-              multiline
-              maxFontSizeMultiplier={1}
-              onSubmitEditing={handleSend}
-              editable={!isStreaming}
-            />
+            <View style={styles.inputWrap}>
+              <TextInput
+                ref={inputRef}
+                style={[styles.input, { height: inputHeight }]}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="What are you curious about?"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                maxFontSizeMultiplier={1}
+                scrollEnabled={inputHeight >= 96}
+                onSubmitEditing={handleSend}
+                editable={!isStreaming}
+              />
+              {/* Invisible mirror: always lays out, so it reports the wrapped text height
+                  for both typed and programmatically-set text (Keep Exploring suggestions),
+                  which a multiline TextInput does not do on its own. */}
+              <Text
+                style={[styles.input, styles.inputMeasure]}
+                maxFontSizeMultiplier={1}
+                onLayout={(e) =>
+                  setInputHeight(Math.min(96, Math.max(20, Math.ceil(e.nativeEvent.layout.height))))
+                }
+              >
+                {inputText.length ? inputText : ' '}
+              </Text>
+            </View>
             <TouchableOpacity
               onPress={inputText.trim() ? handleSend : undefined}
               hitSlop={8}
@@ -643,6 +779,34 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
   },
+  messageArea: {
+    flex: 1,
+  },
+  currentTurn: {
+    gap: 12,
+  },
+  scrollDownWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 12,
+    alignItems: 'center',
+  },
+  scrollDownBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
   messageRow: {},
   messageRowUser: {
     alignSelf: 'flex-end',
@@ -793,16 +957,24 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 8,
   },
-  input: {
+  inputWrap: {
     flex: 1,
+  },
+  input: {
     fontFamily: 'Inter',
     fontSize: 15,
     color: colors.textPrimary,
-    maxHeight: 96,
     lineHeight: 20,
-    minHeight: 20,
     padding: 0,
     margin: 0,
+  },
+  inputMeasure: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    opacity: 0,
+    zIndex: -1,
   },
   inputIcon: {
     alignSelf: 'flex-end',

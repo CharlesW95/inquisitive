@@ -1,6 +1,14 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
-import { ALL_CARDS_PAGE_SIZE, getAllCards, getDueCards } from '@/lib/db/cards';
+import { ALL_CARDS_PAGE_SIZE, getAllCards, getCardById, getDueCards } from '@/lib/db/cards';
+
+export function useCard(cardId?: string) {
+  return useQuery({
+    queryKey: ['card', cardId],
+    queryFn: () => getCardById(cardId!),
+    enabled: !!cardId,
+  });
+}
 
 export function useDueCards() {
   const userId = useAuthStore((s) => s.userId);

@@ -156,6 +156,25 @@ export async function getAllCards(userId: string, page: number = 0): Promise<Due
     .filter(Boolean) as DueCard[];
 }
 
+export async function getCardById(cardId: string): Promise<DueCard | null> {
+  const { data, error } = await supabase
+    .from('card_schedules')
+    .select('*, cards!inner(*, conversations(title))')
+    .eq('card_id', cardId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const { cards: cardData, ...scheduleData } = data as any;
+  if (!cardData || cardData.deleted_at) return null;
+  const { conversations, ...card } = cardData;
+  return {
+    ...card,
+    schedule: scheduleData as CardSchedule,
+    conversationTitle: conversations?.title ?? null,
+  };
+}
+
 export async function getDueCards(userId: string): Promise<DueCard[]> {
   const now = new Date().toISOString();
 

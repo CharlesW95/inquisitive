@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   Modal,
   ScrollView,
   StyleSheet,
@@ -15,7 +16,7 @@ import Markdown from 'react-native-markdown-display';
 import { Rating } from 'ts-fsrs';
 import { colors } from '@/constants/colors';
 import { sessionAnswerMarkdownStyles, sessionQuestionMarkdownStyles } from '@/constants/typography';
-import { useDueCards } from '@/hooks/useDueCards';
+import { useCard, useDueCards } from '@/hooks/useDueCards';
 import { useSubmitRating } from '@/hooks/useCardReview';
 import { useDeleteCard } from '@/hooks/useCards';
 import { useToastStore } from '@/stores/toastStore';
@@ -40,11 +41,13 @@ function formatDueLabel(due: string): string {
 
 function CardPopover({
   visible,
+  anchor,
   onClose,
   onEdit,
   onDelete,
 }: {
   visible: boolean;
+  anchor: { top: number; right: number } | null;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -52,7 +55,7 @@ function CardPopover({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.popoverOverlay} activeOpacity={1} onPress={onClose}>
-        <View style={styles.popover}>
+        <View style={[styles.popover, anchor]}>
           <TouchableOpacity style={styles.popoverItem} onPress={onEdit}>
             <SymbolView name="pencil" size={15} tintColor={colors.textMuted} />
             <Text style={styles.popoverText}>Edit</Text>
@@ -102,11 +105,16 @@ function DeleteModal({
 }
 
 export default function ReviewSessionScreen() {
-  const { startCardId } = useLocalSearchParams<{ startCardId?: string }>();
+  const { startCardId, singleCardId } = useLocalSearchParams<{
+    startCardId?: string;
+    singleCardId?: string;
+  }>();
+  const singleMode = !!singleCardId;
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { data: dueCards, isLoading } = useDueCards();
+  const { data: dueCards, isLoading: dueLoading } = useDueCards();
+  const { data: singleCard, isLoading: singleLoading } = useCard(singleCardId);
   const submitRating = useSubmitRating();
   const deleteCard = useDeleteCard();
   const showToast = useToastStore((s) => s.showToast);
@@ -117,11 +125,25 @@ export default function ReviewSessionScreen() {
   const [ratedCount, setRatedCount] = useState(0);
   const [initialSize, setInitialSize] = useState(0);
   const [showPopover, setShowPopover] = useState(false);
+  const [popoverAnchor, setPopoverAnchor] = useState<{ top: number; right: number } | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const initialized = useRef(false);
 
+  const isLoading = singleMode ? singleLoading : dueLoading;
+
   useEffect(() => {
-    if (dueCards && !initialized.current) {
+    if (initialized.current) return;
+
+    if (singleMode) {
+      if (singleCard) {
+        initialized.current = true;
+        setQueue([singleCard]);
+        setInitialSize(1);
+      }
+      return;
+    }
+
+    if (dueCards) {
       initialized.current = true;
       let ordered = [...dueCards];
       if (startCardId) {
@@ -134,19 +156,23 @@ export default function ReviewSessionScreen() {
       setQueue(ordered);
       setInitialSize(ordered.length);
     }
-  }, [dueCards, startCardId]);
+  }, [dueCards, startCardId, singleMode, singleCard]);
 
   const currentCard = queue[currentIndex] ?? null;
   const schedulingOptions: SchedulingOption[] = currentCard
     ? getSchedulingOptions(currentCard.schedule)
     : [];
 
-  const isComplete = initialSize > 0 && ratedCount >= initialSize;
+  const isComplete = !singleMode && initialSize > 0 && ratedCount >= initialSize;
 
   async function handleRate(rating: Rating) {
     if (!currentCard || submitRating.isPending) return;
     try {
       await submitRating.mutateAsync({ card: currentCard, rating });
+      if (singleMode) {
+        router.back();
+        return;
+      }
       setRatedCount((n) => n + 1);
       setCurrentIndex((i) => i + 1);
       setPhase('question');
@@ -226,10 +252,14 @@ export default function ReviewSessionScreen() {
         <TouchableOpacity onPress={() => router.back()} hitSlop={8} style={styles.topBarClose}>
           <Text style={styles.closeBtn}>✕</Text>
         </TouchableOpacity>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
-        </View>
-        <Text style={styles.counter}>{ratedCount + 1} / {initialSize}</Text>
+        {!singleMode && (
+          <>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+            </View>
+            <Text style={styles.counter}>{ratedCount + 1} / {initialSize}</Text>
+          </>
+        )}
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
@@ -238,7 +268,14 @@ export default function ReviewSessionScreen() {
           <Text style={styles.topicLabel} numberOfLines={1}>
             {currentCard.conversationTitle?.toUpperCase() ?? 'CARD'}
           </Text>
-          <TouchableOpacity onPress={() => setShowPopover(true)} hitSlop={8}>
+          <TouchableOpacity
+            onPress={(e) => {
+              const { pageX, pageY } = e.nativeEvent;
+              setPopoverAnchor({ top: pageY + 8, right: Dimensions.get('window').width - pageX });
+              setShowPopover(true);
+            }}
+            hitSlop={8}
+          >
             <Text style={styles.moreBtn}>···</Text>
           </TouchableOpacity>
         </View>
@@ -265,9 +302,11 @@ export default function ReviewSessionScreen() {
             <TouchableOpacity style={styles.goldPill} onPress={() => setPhase('answer')}>
               <Text style={styles.goldPillText}>Show answer</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleSkip} style={styles.skipLink}>
-              <Text style={styles.skipText}>Skip this card  ›</Text>
-            </TouchableOpacity>
+            {!singleMode && (
+              <TouchableOpacity onPress={handleSkip} style={styles.skipLink}>
+                <Text style={styles.skipText}>Skip this card  ›</Text>
+              </TouchableOpacity>
+            )}
           </>
         ) : (
           <>
@@ -285,15 +324,18 @@ export default function ReviewSessionScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity onPress={handleSkip} style={styles.skipLink}>
-              <Text style={styles.skipText}>Skip this card  ›</Text>
-            </TouchableOpacity>
+            {!singleMode && (
+              <TouchableOpacity onPress={handleSkip} style={styles.skipLink}>
+                <Text style={styles.skipText}>Skip this card  ›</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
       </View>
 
       <CardPopover
         visible={showPopover}
+        anchor={popoverAnchor}
         onClose={() => setShowPopover(false)}
         onEdit={handleEdit}
         onDelete={() => {
@@ -494,8 +536,6 @@ const styles = StyleSheet.create({
   },
   popover: {
     position: 'absolute',
-    top: 100,
-    right: 20,
     backgroundColor: colors.surface,
     borderRadius: 8,
     overflow: 'hidden',

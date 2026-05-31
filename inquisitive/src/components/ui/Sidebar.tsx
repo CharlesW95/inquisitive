@@ -1,6 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Dimensions,
   Pressable,
@@ -16,6 +15,7 @@ import { spacing } from '@/constants/spacing';
 import { supabase } from '@/lib/db/client';
 import { useProfileStore } from '@/stores/profileStore';
 import { useFirstName } from '@/hooks/useFirstName';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const PANEL_WIDTH = Dimensions.get('window').width * 0.7;
 
@@ -30,6 +30,7 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
   const initial = firstName?.trim()?.charAt(0)?.toUpperCase() ?? '';
   const translateX = useRef(new Animated.Value(-PANEL_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const [showSignOut, setShowSignOut] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -62,19 +63,11 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
     }
   }, [visible]);
 
-  function handleSignOut() {
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: async () => {
-          onClose();
-          await supabase.auth.signOut();
-          useProfileStore.getState().clear();
-        },
-      },
-    ]);
+  async function confirmSignOut() {
+    setShowSignOut(false);
+    onClose();
+    await supabase.auth.signOut();
+    useProfileStore.getState().clear();
   }
 
   return (
@@ -116,7 +109,7 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
         <View style={styles.divider} />
 
         <TouchableOpacity
-          onPress={handleSignOut}
+          onPress={() => setShowSignOut(true)}
           activeOpacity={0.7}
           style={styles.row}
         >
@@ -128,6 +121,16 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
           <Text style={styles.rowLabel}>Sign Out</Text>
         </TouchableOpacity>
       </Animated.View>
+
+      <ConfirmDialog
+        visible={showSignOut}
+        title="Sign out"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign out"
+        destructive
+        onConfirm={confirmSignOut}
+        onCancel={() => setShowSignOut(false)}
+      />
     </Animated.View>
   );
 }

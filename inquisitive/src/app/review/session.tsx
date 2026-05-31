@@ -81,8 +81,10 @@ function DeleteModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <View style={styles.dialog}>
-          <Text style={styles.dialogTitle}>Delete this card?</Text>
-          <Text style={styles.dialogSubtitle}>This action cannot be undone.</Text>
+          <View style={styles.dialogHeader}>
+            <Text style={styles.dialogTitle}>Delete this card?</Text>
+            <Text style={styles.dialogSubtitle}>This action cannot be undone.</Text>
+          </View>
           <View style={styles.dialogRule} />
           <View style={styles.dialogButtons}>
             <TouchableOpacity style={styles.dialogBtn} onPress={onCancel}>
@@ -533,7 +535,11 @@ const styles = StyleSheet.create({
     width: 280,
     backgroundColor: colors.surface,
     borderRadius: 16,
-    padding: 24,
+    overflow: 'hidden',
+  },
+  dialogHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
   },
   dialogTitle: {
     fontFamily: 'Fraunces-Bold',
@@ -564,7 +570,6 @@ const styles = StyleSheet.create({
   dialogDivider: {
     width: 1,
     backgroundColor: colors.border,
-    marginVertical: 4,
   },
   dialogBtnCancel: {
     fontFamily: 'Inter-SemiBold',

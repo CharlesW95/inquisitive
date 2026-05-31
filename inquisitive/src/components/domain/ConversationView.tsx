@@ -82,6 +82,15 @@ function TypingIndicator() {
   );
 }
 
+// react-native-markdown-display re-parses and rebuilds its entire tree on every render.
+// While the answer is streaming that's invisible (the text is actively growing), but once
+// it's final any unrelated re-render — suggestions loading/storing, the spacer releasing —
+// would re-run that rebuild on static content and flicker it. Memoizing on `content` keeps
+// the finished answer mounted untouched until its text actually changes.
+const AssistantMarkdown = React.memo(function AssistantMarkdown({ content }: { content: string }) {
+  return <Markdown style={serifBodyMarkdownStyles}>{content}</Markdown>;
+});
+
 function DeleteConversationModal({
   visible,
   onCancel,
@@ -174,6 +183,11 @@ export function ConversationView({ mode, routeId }: ConversationViewProps) {
   const { suggestionsByConversation, setSuggestions: storeSuggestions, clearSuggestions } = useSuggestionsStore();
   const suggestions = suggestionsByConversation[id] ?? [];
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  // Whether the latest turn is rendered in the pinned wrapper (true from the first send
+  // until unmount — each new send re-pins the latest turn and folds the prior one into
+  // history) and whether we're still reserving a screenful below it to keep it pinned.
+  const [turnActive, setTurnActive] = useState(false);
+  const [reserveSpace, setReserveSpace] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
@@ -212,23 +226,40 @@ export function ConversationView({ mode, routeId }: ConversationViewProps) {
       )
     : messages;
 
-  // During streaming the last base message is the current question; render it together
-  // with the streaming answer inside one measured wrapper so we can pin + reserve space.
-  const currentUserMsg = isStreaming && baseMessages.length > 0
-    ? baseMessages[baseMessages.length - 1]
-    : null;
-  const historicalMessages = currentUserMsg ? baseMessages.slice(0, -1) : baseMessages;
+  // The "active turn" — the latest question plus its answer — stays in one measured wrapper
+  // from the moment it's sent until the next send. Keeping it mounted past the end of
+  // streaming (rather than collapsing it back into the history immediately) is what makes the
+  // streaming → "Keep Exploring" handoff seamless: the answer never blanks out waiting for the
+  // DB round-trip, and the suggestions load into the same reserved space below it.
+  let currentUserMsg: Message | null = null;
+  let historicalMessages = baseMessages;
+  if (turnActive && baseMessages.length > 0) {
+    const last = baseMessages[baseMessages.length - 1];
+    if (last.role === 'assistant') {
+      // The answer's DB row has landed; the turn's question is the row before it. We still
+      // render the answer from in-memory text below, so slice both out of the history.
+      currentUserMsg = baseMessages[baseMessages.length - 2] ?? null;
+      historicalMessages = baseMessages.slice(0, currentUserMsg ? -2 : -1);
+    } else {
+      // Still streaming, or the answer hasn't been persisted yet — the question is last.
+      currentUserMsg = last;
+      historicalMessages = baseMessages.slice(0, -1);
+    }
+  }
+  // The answer shown in the active turn: live tokens while streaming, the completed text
+  // afterwards. We hold onto it past stream end (rather than clearing it) so the turn never
+  // momentarily renders an empty answer before the persisted message arrives.
   const streamingMsg: DisplayMessage = {
     id: 'streaming',
     role: 'assistant',
     content: streamingText,
     created_at: '',
   };
-  // Reserve a screenful below the current turn so the question pins to the top. As the
-  // answer grows the spacer shrinks by the same amount (content size stays constant → no
-  // scroll). Once the answer outgrows the screen the spacer is 0 and it simply extends
-  // below the fold — we never auto-scroll; the user reads and scrolls at their own pace.
-  const spacerHeight = isStreaming ? Math.max(0, viewportH - turnH) : 0;
+  // Reserve a screenful below the active turn so the question pins to the top. As the answer
+  // — and then the suggestions — grow, the spacer shrinks by the same amount (content size
+  // stays constant → no scroll jump). We keep reserving until the suggestions have settled,
+  // then release back to natural flow.
+  const spacerHeight = reserveSpace ? Math.max(0, viewportH - turnH) : 0;
 
   const recomputeScrollButton = (contentH: number) => {
     const { offsetY, viewportH: vh } = scrollMetrics.current;
@@ -254,7 +285,7 @@ export function ConversationView({ mode, routeId }: ConversationViewProps) {
           {msg.id === 'streaming' && streamingText === '' ? (
             <TypingIndicator />
           ) : (
-            <Markdown style={serifBodyMarkdownStyles}>{msg.content}</Markdown>
+            <AssistantMarkdown content={msg.content} />
           )}
         </View>
       )}
@@ -360,6 +391,8 @@ export function ConversationView({ mode, routeId }: ConversationViewProps) {
     setTurnH(0);
     pendingPinRef.current = true;
     hasSentRef.current = true;
+    setTurnActive(true);
+    setReserveSpace(true);
     setIsStreaming(true);
     setStreamingText('');
 
@@ -392,22 +425,32 @@ export function ConversationView({ mode, routeId }: ConversationViewProps) {
             showToast('Card generation failed', 'error');
           }
         });
-        setOptimisticUserMsg(null);
-        setStreamingText('');
         setIsStreaming(false);
+        // Deliberately keep the streamed answer and the question's optimistic row mounted —
+        // clearing them here is what used to blank the answer until the persisted message
+        // arrived. The turn stays pinned (reserveSpace) while suggestions load, then releases
+        // back to natural flow once they've settled.
         if (fullText.trim() !== REFUSAL_TEXT) {
           setSuggestionsLoading(true);
           generateFollowUpSuggestions(text, fullText)
             .then((results) => storeSuggestions(activeId!, results))
             .catch(() => { })
-            .finally(() => setSuggestionsLoading(false));
+            .finally(() => {
+              setSuggestionsLoading(false);
+              setReserveSpace(false);
+            });
+        } else {
+          setReserveSpace(false);
         }
       },
       (error) => {
         console.error('Stream error:', error);
         showToast('Failed to get a response. Please try again.', 'error');
         setOptimisticUserMsg(null);
+        setStreamingText('');
         setIsStreaming(false);
+        setTurnActive(false);
+        setReserveSpace(false);
       },
     );
   }
@@ -507,8 +550,9 @@ export function ConversationView({ mode, routeId }: ConversationViewProps) {
             onContentSizeChange={(_w, h) => recomputeScrollButton(h)}
           >
             {historicalMessages.map(renderRow)}
-            {currentUserMsg && (
+            {turnActive && (
               <View
+                key="active-turn"
                 style={styles.currentTurn}
                 onLayout={(e) => {
                   const { y, height } = e.nativeEvent.layout;
@@ -519,12 +563,28 @@ export function ConversationView({ mode, routeId }: ConversationViewProps) {
                   }
                 }}
               >
-                {renderRow(currentUserMsg)}
+                {currentUserMsg && renderRow(currentUserMsg)}
                 {renderRow(streamingMsg)}
+                {/* Rendered inside the measured turn so its height is folded into turnH —
+                    the spacer shrinks to absorb it and the scroll position holds steady. */}
+                {(suggestions.length > 0 || suggestionsLoading) && (
+                  <View style={styles.keepExploringContainer}>
+                    <KeepExploring
+                      suggestions={suggestions}
+                      isLoading={suggestionsLoading}
+                      onSelectSuggestion={(suggestionText) => {
+                        setInputText(suggestionText);
+                        inputRef.current?.focus();
+                      }}
+                    />
+                  </View>
+                )}
               </View>
             )}
-            {isStreaming && <View style={{ height: spacerHeight }} />}
-            {!isStreaming && (suggestions.length > 0 || suggestionsLoading) && (
+            {reserveSpace && <View style={{ height: spacerHeight }} />}
+            {/* Persisted suggestions from a previous session, shown when reopening a
+                conversation before any new turn is sent. */}
+            {!turnActive && (suggestions.length > 0 || suggestionsLoading) && (
               <View style={styles.keepExploringContainer}>
                 <KeepExploring
                   suggestions={suggestions}

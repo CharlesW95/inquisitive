@@ -31,6 +31,7 @@ import { useCardCount } from '@/hooks/useCards';
 import { useAuthStore } from '@/stores/authStore';
 import { useAutoGenCardsStore } from '@/stores/autoGenCardsStore';
 import { useToastStore } from '@/stores/toastStore';
+import { useUnviewedCardsStore } from '@/stores/unviewedCardsStore';
 import { KeepExploring } from '@/components/domain/KeepExploring';
 import { serifBodyMarkdownStyles } from '@/constants/typography';
 import { useSuggestionsStore } from '@/stores/suggestionsStore';
@@ -139,6 +140,10 @@ export default function ConversationScreen() {
   const userId = useAuthStore((s) => s.userId);
   const autoGenCards = useAutoGenCardsStore((s) => s.autoGenByConversation[id] !== false);
   const setAutoGenCards = useAutoGenCardsStore((s) => s.setAutoGen);
+  const hasNewCards = useUnviewedCardsStore((s) => !!s.unviewedByConversation[id]);
+  const markCardsUnviewed = useUnviewedCardsStore((s) => s.markUnviewed);
+  const cardsIconColor = hasNewCards ? colors.textPrimary : colors.textMuted;
+  const pulseScale = useRef(new Animated.Value(1)).current;
   const deleteConversation = useDeleteConversation();
   const { suggestionsByConversation, setSuggestions: storeSuggestions, clearSuggestions } = useSuggestionsStore();
   const suggestions = suggestionsByConversation[id] ?? [];
@@ -250,6 +255,8 @@ export default function ConversationScreen() {
               await insertCards(userId!, id, assistantMsg.id, drafts);
               queryClient.invalidateQueries({ queryKey: ['cardCount', id] });
               queryClient.invalidateQueries({ queryKey: ['conversations'] });
+              markCardsUnviewed(id);
+              runPulse();
             }
           } catch (e) {
             showToast('Card generation failed', 'error');
@@ -273,6 +280,14 @@ export default function ConversationScreen() {
         setIsStreaming(false);
       },
     );
+  }
+
+  function runPulse() {
+    pulseScale.setValue(1);
+    Animated.sequence([
+      Animated.timing(pulseScale, { toValue: 1.3, duration: 180, useNativeDriver: true }),
+      Animated.timing(pulseScale, { toValue: 1, duration: 180, useNativeDriver: true }),
+    ]).start();
   }
 
   function handleMenuPress() {
@@ -307,8 +322,10 @@ export default function ConversationScreen() {
 
         <View style={styles.navRightGroup}>
           <TouchableOpacity onPress={() => router.push({ pathname: '/conversation/[id]/cards', params: { id } })} style={styles.navCardsBtn} hitSlop={8}>
-            <SymbolView name="square.stack.3d.up.fill" size={16} tintColor={colors.textMuted} />
-            <Text style={styles.cardCount}>{cardCount}</Text>
+            <Animated.View style={{ transform: [{ scale: pulseScale }] }}>
+              <SymbolView name="square.stack.3d.up.fill" size={16} tintColor={cardsIconColor} />
+            </Animated.View>
+            <Text style={[styles.cardCount, { color: cardsIconColor }]}>{cardCount}</Text>
           </TouchableOpacity>
           <TouchableOpacity ref={menuBtnRef} onPress={handleMenuPress} hitSlop={8}>
             <SymbolView name="ellipsis" size={18} tintColor={colors.textMuted} />

@@ -39,8 +39,8 @@ export async function insertCards(
         user_id: userId,
         conversation_id: conversationId,
         source_message_id: sourceMessageId,
-        prompt: d.front,
-        answer: d.back,
+        prompt: d.front.trim(),
+        answer: d.back.trim(),
         modality: d.modality,
       })),
     )
@@ -90,8 +90,8 @@ export async function createCard(
     .insert({
       user_id: userId,
       conversation_id: conversationId,
-      prompt: front,
-      answer: back,
+      prompt: front.trim(),
+      answer: back.trim(),
       modality: 'basic',
     })
     .select();
@@ -120,7 +120,7 @@ export async function createCard(
 export async function updateCard(cardId: string, front: string, back: string): Promise<void> {
   const { error } = await supabase
     .from('cards')
-    .update({ prompt: front, answer: back, updated_at: new Date().toISOString() })
+    .update({ prompt: front.trim(), answer: back.trim(), updated_at: new Date().toISOString() })
     .eq('id', cardId);
   if (error) throw error;
 }

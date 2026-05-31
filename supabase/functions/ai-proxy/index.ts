@@ -113,7 +113,7 @@ Deno.serve(async (req: Request) => {
 
     const prompt =
       `You generate flashcards from a conversation exchange. Return 0–2 cards worth keeping in a spaced repetition deck.\n\n` +
-      `The "back" field is rendered as Markdown. Match the format to the question type.\n\n` +
+      `The "front" field is plain text only — never use markdown, asterisks, underscores, backticks, or any formatting characters. Write it as a natural sentence or question. The "back" field is rendered as Markdown. Match the format to the question type.\n\n` +
       `Example (single-fact recall):\n` +
       `Front: "When did the Berlin Wall fall?"\n` +
       `Back: "**November 9, 1989**"\n\n` +
@@ -141,7 +141,8 @@ Deno.serve(async (req: Request) => {
       `- For pure recall (when/who/single fact), give just the fact. For conceptual answers, lead with a punchy one-sentence answer; add bullets only if they genuinely add value.\n` +
       `- **Bold** the single most critical term or number, sparingly.\n` +
       `- No headings (#). No em dashes (—); use commas, periods, or colons.\n` +
-      `- The front must be specific and answerable from the card alone.\n\n` +
+      `- The front must be specific and answerable from the card alone.\n` +
+      `- The front is plaintext only — no *, **, _, \`, #, or any other markdown.\n\n` +
       `Conversation title: '${body.title}'\n` +
       existingSection +
       `\nExchange:\nUser: ${body.userMessage}\n\nAssistant: ${body.aiResponse}\n\n` +

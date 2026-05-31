@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -18,7 +18,8 @@ import { colors } from '@/constants/colors';
 import Markdown from 'react-native-markdown-display';
 import { useConversationCards, useDeleteCard } from '@/hooks/useCards';
 import { useToastStore } from '@/stores/toastStore';
-import { cardAnswerMarkdownStyles } from '@/constants/typography';
+import { useUnviewedCardsStore } from '@/stores/unviewedCardsStore';
+import { cardAnswerMarkdownStyles, cardQuestionMarkdownStyles } from '@/constants/typography';
 import type { Card } from '@/lib/types';
 
 function DeleteModal({
@@ -70,6 +71,11 @@ export default function CardsScreen() {
   const { data: cards = [] } = useConversationCards(id);
   const deleteCard = useDeleteCard();
   const showToast = useToastStore((s) => s.showToast);
+  const markCardsViewed = useUnviewedCardsStore((s) => s.markViewed);
+
+  useEffect(() => {
+    if (id) markCardsViewed(id);
+  }, [id, markCardsViewed]);
 
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   const displayedCards = useMemo(
@@ -145,7 +151,9 @@ export default function CardsScreen() {
           {displayedCards.map((card) => (
             <View key={card.id} style={styles.cardItem}>
               <View style={styles.cardTop}>
-                <Text style={styles.cardFront}>{card.prompt}</Text>
+                <View style={styles.cardFront}>
+                  <Markdown style={cardQuestionMarkdownStyles}>{card.prompt}</Markdown>
+                </View>
                 <CardMenuButton
                   onPress={(btn) => handleMenuButtonPress(card, btn)}
                 />
@@ -293,10 +301,6 @@ const styles = StyleSheet.create({
   },
   cardFront: {
     flex: 1,
-    fontFamily: 'Fraunces',
-    fontSize: 17,
-    color: colors.textPrimary,
-    lineHeight: 24,
     paddingRight: 4,
   },
   menuDots: {

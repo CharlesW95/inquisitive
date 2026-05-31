@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -18,7 +18,8 @@ import { colors } from '@/constants/colors';
 import Markdown from 'react-native-markdown-display';
 import { useConversationCards, useDeleteCard } from '@/hooks/useCards';
 import { useToastStore } from '@/stores/toastStore';
-import { cardAnswerMarkdownStyles } from '@/constants/typography';
+import { useUnviewedCardsStore } from '@/stores/unviewedCardsStore';
+import { cardAnswerMarkdownStyles, cardQuestionMarkdownStyles } from '@/constants/typography';
 import type { Card } from '@/lib/types';
 
 function DeleteModal({
@@ -34,8 +35,10 @@ function DeleteModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <View style={styles.dialog}>
-          <Text style={styles.dialogTitle}>Are you sure?</Text>
-          <Text style={styles.dialogSubtitle}>This action cannot be undone.</Text>
+          <View style={styles.dialogHeader}>
+            <Text style={styles.dialogTitle}>Are you sure?</Text>
+            <Text style={styles.dialogSubtitle}>This action cannot be undone.</Text>
+          </View>
           <View style={styles.dialogRule} />
           <View style={styles.dialogButtons}>
             <TouchableOpacity style={styles.dialogBtn} onPress={onCancel}>
@@ -70,6 +73,17 @@ export default function CardsScreen() {
   const { data: cards = [] } = useConversationCards(id);
   const deleteCard = useDeleteCard();
   const showToast = useToastStore((s) => s.showToast);
+  const markCardsViewed = useUnviewedCardsStore((s) => s.markViewed);
+
+  useEffect(() => {
+    if (id) markCardsViewed(id);
+  }, [id, markCardsViewed]);
+
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
+  const displayedCards = useMemo(
+    () => (sortDir === 'desc' ? cards : [...cards].reverse()),
+    [cards, sortDir],
+  );
 
   const [activeMenu, setActiveMenu] = useState<{
     card: Card;
@@ -105,7 +119,17 @@ export default function CardsScreen() {
           <SymbolView name="chevron.left" size={20} tintColor={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.navTitle}>{cards.length} Cards</Text>
-        <View style={styles.navRight} />
+        {cards.length > 1 ? (
+          <TouchableOpacity
+            onPress={() => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
+            style={styles.navButton}
+            hitSlop={8}
+          >
+            <SymbolView name="arrow.up.arrow.down" size={18} tintColor={colors.textMuted} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.navRight} />
+        )}
       </View>
 
       {/* Body */}
@@ -126,10 +150,12 @@ export default function CardsScreen() {
           contentContainerStyle={styles.cardList}
           showsVerticalScrollIndicator={false}
         >
-          {cards.map((card) => (
+          {displayedCards.map((card) => (
             <View key={card.id} style={styles.cardItem}>
               <View style={styles.cardTop}>
-                <Text style={styles.cardFront}>{card.prompt}</Text>
+                <View style={styles.cardFront}>
+                  <Markdown style={cardQuestionMarkdownStyles}>{card.prompt}</Markdown>
+                </View>
                 <CardMenuButton
                   onPress={(btn) => handleMenuButtonPress(card, btn)}
                 />
@@ -277,10 +303,6 @@ const styles = StyleSheet.create({
   },
   cardFront: {
     flex: 1,
-    fontFamily: 'Fraunces',
-    fontSize: 17,
-    color: colors.textPrimary,
-    lineHeight: 24,
     paddingRight: 4,
   },
   menuDots: {
@@ -346,7 +368,11 @@ const styles = StyleSheet.create({
     width: 280,
     backgroundColor: colors.surface,
     borderRadius: 16,
-    padding: 24,
+    overflow: 'hidden',
+  },
+  dialogHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
   },
   dialogTitle: {
     fontFamily: 'Fraunces-Bold',
@@ -377,7 +403,6 @@ const styles = StyleSheet.create({
   dialogDivider: {
     width: 1,
     backgroundColor: colors.border,
-    marginVertical: 4,
   },
   dialogBtnCancel: {
     fontFamily: 'Inter-SemiBold',

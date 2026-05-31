@@ -1,9 +1,12 @@
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { SymbolView } from "expo-symbols";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "@/constants/colors";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ChatBar } from "@/components/ui/ChatBar";
+import { Sidebar } from "@/components/ui/Sidebar";
 import { ReviewCard } from "@/components/domain/ReviewCard";
 import { ConversationRow } from "@/components/domain/ConversationRow";
 import { useRecentConversations } from "@/hooks/useConversations";
@@ -39,6 +42,7 @@ function getGreeting(): string {
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [menuOpen, setMenuOpen] = useState(false);
   const { data: recentConversations, isLoading: conversationsLoading } = useRecentConversations();
   const { data: dueCards, isLoading: dueCardsLoading } = useDueCards();
   const reviewCards = (dueCards ?? []).slice(0, 5);
@@ -52,6 +56,14 @@ export default function HomeScreen() {
     >
       {/* Top Nav Bar */}
       <View className="flex-row items-center px-5 py-3">
+        <TouchableOpacity
+          onPress={() => setMenuOpen((o) => !o)}
+          hitSlop={8}
+          activeOpacity={0.7}
+          style={{ marginRight: 12 }}
+        >
+          <SymbolView name="line.3.horizontal" size={20} tintColor={colors.textMuted} />
+        </TouchableOpacity>
         <Text
           className="font-sans text-text-muted uppercase"
           style={{ fontSize: 11, letterSpacing: 1.2 }}
@@ -166,6 +178,8 @@ export default function HomeScreen() {
       <View style={{ paddingBottom: insets.bottom + 8, paddingTop: 8 }}>
         <ChatBar onPress={() => router.push("/conversation/new")} />
       </View>
+
+      <Sidebar visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>
   );
 }

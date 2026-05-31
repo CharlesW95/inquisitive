@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Modal,
   StyleSheet,
@@ -31,11 +32,13 @@ function formatDueDateLabel(due: string): string {
 
 function CardPopover({
   visible,
+  anchor,
   onClose,
   onEdit,
   onDelete,
 }: {
   visible: boolean;
+  anchor: { top: number; right: number } | null;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -43,7 +46,7 @@ function CardPopover({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.popoverOverlay} activeOpacity={1} onPress={onClose}>
-        <View style={styles.popover}>
+        <View style={[styles.popover, anchor]}>
           <TouchableOpacity style={styles.popoverItem} onPress={onEdit}>
             <SymbolView name="pencil" size={15} tintColor={colors.textMuted} />
             <Text style={styles.popoverText}>Edit</Text>
@@ -72,8 +75,10 @@ function DeleteModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.overlay}>
         <View style={styles.dialog}>
-          <Text style={styles.dialogTitle}>Delete this card?</Text>
-          <Text style={styles.dialogSubtitle}>This action cannot be undone.</Text>
+          <View style={styles.dialogHeader}>
+            <Text style={styles.dialogTitle}>Delete this card?</Text>
+            <Text style={styles.dialogSubtitle}>This action cannot be undone.</Text>
+          </View>
           <View style={styles.dialogRule} />
           <View style={styles.dialogButtons}>
             <TouchableOpacity style={styles.dialogBtn} onPress={onCancel}>
@@ -95,6 +100,7 @@ export default function CardExplorerScreen() {
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<FilterMode>('due');
   const [popoverCard, setPopoverCard] = useState<DueCard | null>(null);
+  const [popoverAnchor, setPopoverAnchor] = useState<{ top: number; right: number } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DueCard | null>(null);
 
   const { data: dueCards = [] } = useDueCards();
@@ -166,14 +172,21 @@ export default function CardExplorerScreen() {
         renderItem={({ item: card }) => (
           <TouchableOpacity
             style={styles.cardItem}
-            onPress={() => router.push({ pathname: '/review/session' as any, params: { startCardId: card.id } })}
+            onPress={() => router.push({ pathname: '/review/session' as any, params: { singleCardId: card.id } })}
             activeOpacity={0.7}
           >
             <View style={styles.cardItemRow}>
               <Text style={styles.cardTopic} numberOfLines={1}>
                 {card.conversationTitle?.toUpperCase() ?? 'CARD'}
               </Text>
-              <TouchableOpacity onPress={() => setPopoverCard(card)} hitSlop={8}>
+              <TouchableOpacity
+                onPress={(e) => {
+                  const { pageX, pageY } = e.nativeEvent;
+                  setPopoverAnchor({ top: pageY + 8, right: Dimensions.get('window').width - pageX });
+                  setPopoverCard(card);
+                }}
+                hitSlop={8}
+              >
                 <Text style={styles.moreBtn}>···</Text>
               </TouchableOpacity>
             </View>
@@ -198,6 +211,7 @@ export default function CardExplorerScreen() {
 
       <CardPopover
         visible={!!popoverCard}
+        anchor={popoverAnchor}
         onClose={() => setPopoverCard(null)}
         onEdit={() => {
           if (!popoverCard) return;
@@ -353,8 +367,6 @@ const styles = StyleSheet.create({
   },
   popover: {
     position: 'absolute',
-    top: 100,
-    right: 20,
     backgroundColor: colors.surface,
     borderRadius: 8,
     overflow: 'hidden',
@@ -394,7 +406,11 @@ const styles = StyleSheet.create({
     width: 280,
     backgroundColor: colors.surface,
     borderRadius: 16,
-    padding: 24,
+    overflow: 'hidden',
+  },
+  dialogHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
   },
   dialogTitle: {
     fontFamily: 'Fraunces-Bold',
@@ -425,7 +441,6 @@ const styles = StyleSheet.create({
   dialogDivider: {
     width: 1,
     backgroundColor: colors.border,
-    marginVertical: 4,
   },
   dialogBtnCancel: {
     fontFamily: 'Inter-SemiBold',

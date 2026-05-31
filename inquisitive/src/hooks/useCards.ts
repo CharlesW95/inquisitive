@@ -41,6 +41,10 @@ export function useCreateCard() {
       queryClient.invalidateQueries({ queryKey: ['cards', conversationId] });
       queryClient.invalidateQueries({ queryKey: ['cardCount', conversationId] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      // Also refresh the review surfaces (homescreen preview + explorer) so a deleted
+      // card disappears from them, not just from the conversation it belonged to.
+      queryClient.invalidateQueries({ queryKey: ['dueCards'] });
+      queryClient.invalidateQueries({ queryKey: ['allCards'] });
     },
   });
 }
@@ -72,6 +76,10 @@ export function useDeleteCard() {
       queryClient.invalidateQueries({ queryKey: ['cards', conversationId] });
       queryClient.invalidateQueries({ queryKey: ['cardCount', conversationId] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      // Refresh the review surfaces (homescreen preview + explorer) so a deleted
+      // card disappears from them, not just from the conversation it belonged to.
+      queryClient.invalidateQueries({ queryKey: ['dueCards'] });
+      queryClient.invalidateQueries({ queryKey: ['allCards'] });
     },
   });
 }

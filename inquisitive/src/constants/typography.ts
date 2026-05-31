@@ -6,19 +6,28 @@ const serifBodyBase = {
   color: 'rgba(255,255,255,0.85)',
 };
 
+const serifBodyHeading = {
+  ...serifBodyBase,
+  fontFamily: 'Fraunces-Bold',
+  fontSize: 20,
+  lineHeight: 30,
+  marginTop: 8,
+  marginBottom: 8,
+};
+
 export const serifBodyMarkdownStyles = {
   body: serifBodyBase,
   strong: { fontFamily: 'Fraunces-Bold', fontWeight: undefined as undefined },
   paragraph: { marginBottom: 12, marginTop: 0 },
   bullet_list: { marginVertical: 4 },
   list_item: serifBodyBase,
-  // Normalize headings to body size — no giant H1s in chat responses
-  heading1: serifBodyBase,
-  heading2: serifBodyBase,
-  heading3: serifBodyBase,
-  heading4: serifBodyBase,
-  heading5: serifBodyBase,
-  heading6: serifBodyBase,
+  // Normalize headings to body size — bold, with spacing below
+  heading1: serifBodyHeading,
+  heading2: serifBodyHeading,
+  heading3: serifBodyHeading,
+  heading4: serifBodyHeading,
+  heading5: serifBodyHeading,
+  heading6: serifBodyHeading,
 };
 
 const cardAnswerBase = {
@@ -94,6 +103,7 @@ export const reviewCardQuestionMarkdownStyles = {
 export const cardAnswerMarkdownStyles = {
   body: cardAnswerBase,
   strong: { fontFamily: 'Fraunces-Bold', fontWeight: undefined as undefined },
+  em: { fontFamily: 'Fraunces', fontStyle: 'italic' as const },
   paragraph: { marginBottom: 8, marginTop: 0 },
   bullet_list: { marginVertical: 2 },
   list_item: cardAnswerBase,

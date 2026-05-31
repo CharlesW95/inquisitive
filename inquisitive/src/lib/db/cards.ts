@@ -39,8 +39,8 @@ export async function insertCards(
         user_id: userId,
         conversation_id: conversationId,
         source_message_id: sourceMessageId,
-        prompt: d.front,
-        answer: d.back,
+        prompt: d.front.trim(),
+        answer: d.back.trim(),
         modality: d.modality,
       })),
     )
@@ -74,7 +74,7 @@ export async function getConversationCards(conversationId: string): Promise<Card
     .select('*')
     .eq('conversation_id', conversationId)
     .is('deleted_at', null)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as Card[];
 }
@@ -90,8 +90,8 @@ export async function createCard(
     .insert({
       user_id: userId,
       conversation_id: conversationId,
-      prompt: front,
-      answer: back,
+      prompt: front.trim(),
+      answer: back.trim(),
       modality: 'basic',
     })
     .select();
@@ -120,7 +120,7 @@ export async function createCard(
 export async function updateCard(cardId: string, front: string, back: string): Promise<void> {
   const { error } = await supabase
     .from('cards')
-    .update({ prompt: front, answer: back, updated_at: new Date().toISOString() })
+    .update({ prompt: front.trim(), answer: back.trim(), updated_at: new Date().toISOString() })
     .eq('id', cardId);
   if (error) throw error;
 }
@@ -154,6 +154,25 @@ export async function getAllCards(userId: string, page: number = 0): Promise<Due
       return { ...card, schedule: scheduleData as CardSchedule, conversationTitle: conversations?.title ?? null };
     })
     .filter(Boolean) as DueCard[];
+}
+
+export async function getCardById(cardId: string): Promise<DueCard | null> {
+  const { data, error } = await supabase
+    .from('card_schedules')
+    .select('*, cards!inner(*, conversations(title))')
+    .eq('card_id', cardId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const { cards: cardData, ...scheduleData } = data as any;
+  if (!cardData || cardData.deleted_at) return null;
+  const { conversations, ...card } = cardData;
+  return {
+    ...card,
+    schedule: scheduleData as CardSchedule,
+    conversationTitle: conversations?.title ?? null,
+  };
 }
 
 export async function getDueCards(userId: string): Promise<DueCard[]> {
